@@ -1,0 +1,1 @@
+This repository is exclusively for the development of the palette Canvas Workspace system in accordance with the strategic planning documents.
