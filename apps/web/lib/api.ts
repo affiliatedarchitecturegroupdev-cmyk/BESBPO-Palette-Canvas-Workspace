@@ -20,12 +20,13 @@ export async function currentEmail(): Promise<string | null> {
   return store.get(USER_COOKIE)?.value ?? null;
 }
 
-async function api<T>(path: string, email: string | null): Promise<T | { error: string }> {
+export async function api<T>(path: string, email: string | null, init?: RequestInit): Promise<T | { error: string }> {
   if (!email) return { error: 'not signed in' };
   try {
     const res = await fetch(`${API_URL}${path}`, {
-      headers: { 'x-user-email': email },
       cache: 'no-store',
+      ...init,
+      headers: { 'x-user-email': email, ...(init?.headers ?? {}) },
     });
     if (!res.ok) return { error: `${res.status}` };
     return (await res.json()) as T;

@@ -69,8 +69,10 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
 }
 {
   const caps = capabilitiesOf([Role.ClientApprover]);
-  if (caps.length !== 3 || !caps.includes(Capability.CommentsWrite) || !caps.includes(Capability.NotificationsRead)) {
-    throw new Error('client approver has projects.read + comments.write + notifications.read');
+  if (caps.length !== 5 || !caps.includes(Capability.CommentsWrite) ||
+      !caps.includes(Capability.NotificationsRead) || !caps.includes(Capability.ApprovalsDecide) ||
+      !caps.includes(Capability.DeliverablesRead)) {
+    throw new Error('client approver has projects.read + deliverables.read + comments.write + notifications.read + approvals.decide');
   }
 }
 
@@ -106,6 +108,64 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
   }
   if (can([Role.ClientApprover], Capability.CommentsResolve)) {
     throw new Error('client approver must not resolve comments');
+  }
+}
+
+/* Phase 4 capability matrix checks */
+
+// Version write: creative contributors + leads + ops; QA/AM must not upload versions
+{
+  if (!can([Role.CreativeContributor], Capability.VersionsWrite)) {
+    throw new Error('creative contributor must write versions');
+  }
+  if (can([Role.QualityReviewer], Capability.VersionsWrite) || can([Role.AccountManager], Capability.VersionsWrite)) {
+    throw new Error('non-creative-internal must not write versions');
+  }
+}
+
+// Approval request: account manager + ops only; decision: client approver only
+{
+  if (!can([Role.AccountManager], Capability.ApprovalsRequest)) {
+    throw new Error('account manager must request approvals');
+  }
+  if (can([Role.QualityReviewer], Capability.ApprovalsRequest) || can([Role.CreativeContributor], Capability.ApprovalsRequest)) {
+    throw new Error('production/QA must not request external approval');
+  }
+  if (!can([Role.ClientApprover], Capability.ApprovalsDecide)) {
+    throw new Error('client approver must decide approvals');
+  }
+  if (can([Role.AccountManager], Capability.ApprovalsDecide) || can([Role.ProductionLead], Capability.ApprovalsDecide)) {
+    throw new Error('internal roles must not decide client approvals');
+  }
+}
+
+// QA checklist write: quality reviewer + ops only
+{
+  if (!can([Role.QualityReviewer], Capability.QaWrite) || !can([Role.OperationsDirector], Capability.QaWrite)) {
+    throw new Error('QA reviewer + ops must write QA checklists');
+  }
+  if (can([Role.CreativeContributor], Capability.QaWrite)) {
+    throw new Error('creative contributor must not write QA checklists');
+  }
+}
+
+// Change control write: account manager + ops only
+{
+  if (!can([Role.AccountManager], Capability.ChangeWrite)) {
+    throw new Error('account manager must write change requests');
+  }
+  if (can([Role.CreativeContributor], Capability.ChangeWrite) || can([Role.ClientApprover], Capability.ChangeWrite)) {
+    throw new Error('non-commercial roles must not write change requests');
+  }
+}
+
+// Handover write: production lead + ops only
+{
+  if (!can([Role.ProductionLead], Capability.HandoverWrite)) {
+    throw new Error('production lead must write handover');
+  }
+  if (can([Role.ClientApprover], Capability.HandoverWrite) || can([Role.AgencyContributor], Capability.HandoverWrite)) {
+    throw new Error('external roles must not write handover');
   }
 }
 

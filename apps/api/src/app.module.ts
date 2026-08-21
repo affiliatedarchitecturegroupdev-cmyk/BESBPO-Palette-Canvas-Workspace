@@ -28,6 +28,10 @@ import { NotificationsController } from './notifications/notifications.controlle
 import { NotificationsService } from './notifications/notifications.service';
 import { WorkloadController } from './workload/workload.controller';
 import { WorkloadService } from './workload/workload.service';
+import { ProofingController } from './proofing/proofing.controller';
+import { VersionsService } from './proofing/versions.service';
+import { ApprovalsService } from './proofing/approvals.service';
+import { HandoversService } from './proofing/handovers.service';
 
 @Module({
   controllers: [
@@ -44,6 +48,7 @@ import { WorkloadService } from './workload/workload.service';
     CommentsController,
     NotificationsController,
     WorkloadController,
+    ProofingController,
   ],
   providers: [
     Database,
@@ -62,6 +67,9 @@ import { WorkloadService } from './workload/workload.service';
     CommentsService,
     NotificationsService,
     WorkloadService,
+    VersionsService,
+    ApprovalsService,
+    HandoversService,
   ],
 })
 export class AppModule {}

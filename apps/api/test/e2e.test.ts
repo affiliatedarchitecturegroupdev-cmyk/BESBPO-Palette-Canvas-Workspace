@@ -59,7 +59,10 @@ async function main() {
   // Clean slate
   await pool.query(`
     TRUNCATE audit_event, project_role, milestone, project, brief,
-      service_template, contact, brand, agency, role_binding, person, organisation
+      service_template, contact, brand, agency, role_binding, person, organisation,
+      handover_item, handover_package, change_request, approval,
+      notification, workstream, task, task_dependency, task_checklist, task_collaborator,
+      deliverable, comment, version, qa_checklist
     CASCADE
   `);
 
@@ -397,6 +400,128 @@ async function main() {
       actions.includes('brief.converted_to_project') && actions.includes('project.status_changed') && actions.includes('project.role_assigned'));
     const auditDenied = await api(base, '/audit', { email: 'agency-a@test.example' });
     check('agency cannot read audit (403)', auditDenied.status === 403);
+
+    console.log('e2e: proofing, approvals, handover');
+    // Version creation is gated to creative/production leads + ops
+    const v1 = await api(base, `/proofing/versions/${dlId}`, {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: { label: 'v1', uri: 'assets/logo-v1.png', notes: 'first pass' },
+    });
+    check('version created', v1.status === 201);
+    const v1Id = (v1.json as { id: string }).id;
+
+    // QA checklist (quality reviewer; ops can too), gate before client review
+    const qa1 = await api(base, `/proofing/versions/${v1Id}/qa`, {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: { label: 'inks introduced', kind: 'technical' },
+    });
+    check('QA item added', qa1.status === 201);
+    // version should be under_qa and blocked from client review until QA passes
+    const early = await api(base, `/proofing/approvals/${v1Id}`, {
+      email: 'am@test.example',
+      method: 'POST',
+      body: {},
+    });
+    check('approval blocked before QA passes (409)', early.status === 409);
+
+    const qaItem = (qa1.json as { id: string }).id;
+    await api(base, `/proofing/versions/${v1Id}/qa/${qaItem}`, {
+      email: 'lead@test.example',
+      method: 'PATCH',
+      body: { passed: true, note: 'resolved' },
+    });
+
+    const approval = await api(base, `/proofing/approvals/${v1Id}`, {
+      email: 'am@test.example',
+      method: 'POST',
+      body: { dueAt: '2026-09-30' },
+    });
+    check('approval requested after QA passes', approval.status === 201);
+    const approvalId = (approval.json as { id: string }).id;
+
+    // client approver rejects with changes_requested, client cannot write versions
+    const clientDenied = await api(base, `/proofing/versions/${dlId}`, {
+      email: 'client@test.example',
+      method: 'POST',
+      body: { label: 'bad', uri: 'x.png' },
+    });
+    check('client cannot create versions (403)', clientDenied.status === 403);
+
+    const denied = await api(base, `/proofing/approvals/${approvalId}/decide`, {
+      email: 'am@test.example',
+      method: 'POST',
+      body: { decision: 'approved' },
+    });
+    check('account manager cannot decide approval (403)', denied.status === 403);
+
+    const rejected = await api(base, `/proofing/approvals/${approvalId}/decide`, {
+      email: 'client@test.example',
+      method: 'POST',
+      body: { decision: 'changes_requested', note: 'lighter mark' },
+    });
+    check('client decides changes requested', rejected.status === 201);
+
+    // change request proposed from rejection, accepted by AM
+    const change = await api(base, `/proofing/projects/${project.id}/changes`, {
+      email: 'am@test.example',
+      method: 'POST',
+      body: { title: 'Lighter mark revision', impactHours: 4, impactCost: 1200000, approvalId },
+    });
+    check('change request proposed', change.status === 201);
+    const changeId = (change.json as { id: string }).id;
+    const accept = await api(base, `/proofing/changes/${changeId}/decide`, {
+      email: 'am@test.example',
+      method: 'POST',
+      body: { decision: 'accepted' },
+    });
+    check('change request accepted', accept.status === 200 || accept.status === 201);
+
+    // new version approved → handover package assembled → delivered
+    const v2 = await api(base, `/proofing/versions/${dlId}`, {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: { label: 'v2 — revised', uri: 'assets/logo-v2.png' },
+    });
+    const v2Id = (v2.json as { id: string }).id;
+    const qa2 = await api(base, `/proofing/versions/${v2Id}/qa`, {
+      email: 'lead@test.example', method: 'POST', body: { label: 'comp spec', kind: 'technical' },
+    });
+    await api(base, `/proofing/versions/${v2Id}/qa/${(qa2.json as { id: string }).id}`, {
+      email: 'lead@test.example', method: 'PATCH', body: { passed: true },
+    });
+    const ap2 = await api(base, `/proofing/approvals/${v2Id}`, {
+      email: 'am@test.example', method: 'POST', body: {},
+    });
+    await api(base, `/proofing/approvals/${(ap2.json as { id: string }).id}/decide`, {
+      email: 'client@test.example', method: 'POST', body: { decision: 'approved', note: 'final!' },
+    });
+
+    const pkg = await api(base, `/proofing/projects/${project.id}/handover`, {
+      email: 'lead@test.example', method: 'POST', body: { title: 'Logo suite — delivery' },
+    });
+    check('handover package created', pkg.status === 201);
+    const pkgId = (pkg.json as { id: string }).id;
+
+    // only approved versions may enter the handover package
+    const earlyItem = await api(base, `/proofing/handover/${pkgId}/items`, {
+      email: 'lead@test.example', method: 'POST', body: { versionId: v1Id },
+    });
+    check('unapproved version rejected from handover (409)', earlyItem.status === 409);
+    const item = await api(base, `/proofing/handover/${pkgId}/items`, {
+      email: 'lead@test.example', method: 'POST', body: { versionId: v2Id, licence: 'CC BY', sourceIncluded: true },
+    });
+    check('approved version enters handover', item.status === 201);
+    const delivered = await api(base, `/proofing/handover/${pkgId}/status`, {
+      email: 'lead@test.example', method: 'POST', body: { status: 'delivered' },
+    });
+    check('handover delivered', (delivered.json as { status: string }).status === 'delivered');
+
+    // client sees the handover manifest
+    const manifest = await api(base, `/proofing/projects/${project.id}/handover`, { email: 'client@test.example' });
+    check('client can read handover manifest',
+      !!(manifest.json as { items?: unknown[] }).items && (manifest.json as { items: unknown[] }).items.length === 1);
 
     console.log('e2e: tenancy negatives');
     const otherOrg = randomUUID();
