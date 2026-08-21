@@ -17,6 +17,17 @@ import { TriageController } from './triage/triage.controller';
 import { TriageService } from './triage/triage.service';
 import { ProjectsController } from './projects/projects.controller';
 import { ProjectsService } from './projects/projects.service';
+import { WorkstreamsService } from './workstreams/workstream.service';
+import { TasksController } from './tasks/tasks.controller';
+import { TasksService } from './tasks/tasks.service';
+import { DeliverablesController } from './deliverables/deliverables.controller';
+import { DeliverablesService } from './deliverables/deliverables.service';
+import { CommentsController } from './comments/comments.controller';
+import { CommentsService } from './comments/comments.service';
+import { NotificationsController } from './notifications/notifications.controller';
+import { NotificationsService } from './notifications/notifications.service';
+import { WorkloadController } from './workload/workload.controller';
+import { WorkloadService } from './workload/workload.service';
 
 @Module({
   controllers: [
@@ -28,6 +39,11 @@ import { ProjectsService } from './projects/projects.service';
     IntakeController,
     TriageController,
     ProjectsController,
+    TasksController,
+    DeliverablesController,
+    CommentsController,
+    NotificationsController,
+    WorkloadController,
   ],
   providers: [
     Database,
@@ -40,6 +56,12 @@ import { ProjectsService } from './projects/projects.service';
     IntakeService,
     TriageService,
     ProjectsService,
+    WorkstreamsService,
+    TasksService,
+    DeliverablesService,
+    CommentsService,
+    NotificationsService,
+    WorkloadService,
   ],
 })
 export class AppModule {}

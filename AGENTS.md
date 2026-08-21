@@ -53,6 +53,8 @@ Prefer small, well-specified slices: "Add board permission tests for vendor and 
 - Permission gates are capability-based: `authz.require` /
   `authz.requireScope` (see `apps/api/src/identity/authz.service.ts`);
   capabilities map is in `packages/shared` (`_ROLE_CAPABILITIES`).
+- Browser-side API calls use same-origin prefix `/pc-api` (Next rewrites to
+  `PC_API_URL`), so a hosted tunnel needs only the web port exposed.
 - e2e test `apps/api/test/e2e.test.ts` truncates all domain tables first —
   safe to run repeatedly.
 - Run gates: `npm run build` then `npm run test` at the workspace root.

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { currentEmail, brief, templates } from '@/lib/api';
-import { API_URL } from '@/lib/config';
+import { BROWSER_API } from '@/lib/config';
 import TriagePanel from './TriagePanel';
 
 export default async function BriefDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -65,7 +65,7 @@ export default async function BriefDetail({ params }: { params: Promise<{ id: st
             </>
           )}
         </section>
-        <TriagePanel apiUrl={API_URL} email={email} briefId={id} status={res.status} />
+        <TriagePanel apiUrl={BROWSER_API} email={email} briefId={id} status={res.status} />
       </div>
     </main>
   );

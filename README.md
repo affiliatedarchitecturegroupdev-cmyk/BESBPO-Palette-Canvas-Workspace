@@ -2,16 +2,23 @@
 
 Monorepo for the Palette Canvas production workspace (see `Instructions.txt` and `docs/`).
 
-## Phase 2 — intake and project setup (current)
+## Phase 3 — production workspace (current)
 
-Real-persistence implementation of the planning-document Phase 2: structured
-brief builder, triage with duplicates detection, client/agency records,
-service templates, milestones, role assignment, and project home. See
-[`docs/phase-2.md`](docs/phase-2.md).
+Real-persistence implementation of the planning-document Phase 3: task boards
+with list/calendar views, dependencies with close-blocking, deliverables,
+workstream grouping, comments with @mentions, a notification inbox, and
+workload basics (time logging + per-person load). See
+[`docs/phase-3.md`](docs/phase-3.md).
 
 - `apps/api` — NestJS domain API backed by Postgres (pg driver + runner-managed migrations)
 - `apps/web` — role-aware Next.js workspace shell (dev user switcher)
 - Postgres 17 in Docker is required; seed via `npm run seed -w @palette-canvas/api`
+
+## Phase 2 — intake and project setup
+
+Structured brief builder, triage with duplicates detection, client/agency
+records, service templates, milestones, role assignment, and project home. See
+[`docs/phase-2.md`](docs/phase-2.md).
 
 ## Phase 1 — foundation skeleton
 

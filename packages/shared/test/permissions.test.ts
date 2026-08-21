@@ -68,8 +68,44 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
   }
 }
 {
-  if (capabilitiesOf([Role.ClientApprover]).length !== 1) {
-    throw new Error('client approver has only projects.read');
+  const caps = capabilitiesOf([Role.ClientApprover]);
+  if (caps.length !== 3 || !caps.includes(Capability.CommentsWrite) || !caps.includes(Capability.NotificationsRead)) {
+    throw new Error('client approver has projects.read + comments.write + notifications.read');
+  }
+}
+
+/* Phase 3 capability matrix checks */
+
+// Internal production roles write tasks; external roles do not
+{
+  if (!can([Role.CreativeContributor], Capability.TasksWrite)) {
+    throw new Error('creative contributor must write tasks');
+  }
+  if (can([Role.ClientApprover], Capability.TasksWrite)) {
+    throw new Error('client approver must not write tasks');
+  }
+  if (can([Role.AgencyAdmin], Capability.TasksWrite)) {
+    throw new Error('agency admin must not write tasks');
+  }
+}
+
+// Workload visibility: leadership + finance only
+{
+  if (!can([Role.OperationsDirector], Capability.WorkloadRead) || !can([Role.FinanceUser], Capability.WorkloadRead)) {
+    throw new Error('ops + finance must read workload');
+  }
+  if (can([Role.CreativeContributor], Capability.WorkloadRead)) {
+    throw new Error('creative contributor must not read workload');
+  }
+}
+
+// Only internal review roles resolve comments
+{
+  if (!can([Role.QualityReviewer], Capability.CommentsResolve)) {
+    throw new Error('quality reviewer must resolve comments');
+  }
+  if (can([Role.ClientApprover], Capability.CommentsResolve)) {
+    throw new Error('client approver must not resolve comments');
   }
 }
 

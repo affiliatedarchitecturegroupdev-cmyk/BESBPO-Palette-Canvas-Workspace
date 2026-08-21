@@ -66,8 +66,10 @@ async function seed() {
   const pool = new Pool({ connectionString: url });
   await migrate(pool, migrationsDir(__dirname));
 
-  // Organisation
-  const { rows: orgRows } = await pool.query('SELECT id FROM organisation LIMIT 1');
+  // Organisation (match by name so test fixtures never absorb demo data)
+  const { rows: orgRows } = await pool.query(
+    "SELECT id FROM organisation WHERE name = 'Besbpo Group' LIMIT 1",
+  );
   let orgId: string;
   if (orgRows.length) {
     orgId = orgRows[0].id;
@@ -157,6 +159,76 @@ async function seed() {
       );
       console.log('template seeded:', t.key);
     }
+  }
+
+  // Demo project with Phase 3 production data (idempotent on name match).
+  const tpl = (
+    await pool.query('SELECT id FROM service_template WHERE org_id = $1 AND key = $2', [
+      orgId,
+      'brand_identity',
+    ])
+  ).rows[0];
+  const { rows: existingProjects } = await pool.query(
+    'SELECT id FROM project WHERE org_id = $1 AND name = $2',
+    [orgId, 'Nimbus rebrand'],
+  );
+  const amId = (await pool.query('SELECT id FROM person WHERE email = $1', ['am@besbpo.example'])).rows[0].id;
+  const leadId = (await pool.query('SELECT id FROM person WHERE email = $1', ['lead@besbpo.example'])).rows[0].id;
+  const designId = (await pool.query('SELECT id FROM person WHERE email = $1', ['design@besbpo.example'])).rows[0].id;
+
+  if (!existingProjects.length) {
+    const projectId = randomUUID();
+    await pool.query(
+      'INSERT INTO project (id, org_id, agency_id, brand_id, template_id, name, status, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [projectId, orgId, agencyA, brandA, tpl.id, 'Nimbus rebrand', 'production', amId],
+    );
+    console.log('project seeded: Nimbus rebrand');
+
+    const wsId = randomUUID();
+    await pool.query('INSERT INTO workstream (id, project_id, name) VALUES ($1,$2,$3)', [
+      wsId, projectId, 'Logo suite',
+    ]);
+
+    const dId = randomUUID();
+    await pool.query(
+      'INSERT INTO deliverable (id, org_id, project_id, workstream_id, name, deliverable_type, due_date, assignee_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)',
+      [dId, orgId, projectId, wsId, 'Primary logo', 'logo', '2026-03-21', leadId],
+    );
+
+    const audit = { t: 'Logo research', dep: [] as string[] };
+    const moodboards = { t: 'Moodboard concepts', dep: [] as string[] };
+    const lockup = { t: 'Final lockups', dep: [moodboards.t] as string[] };
+    const taskIds: Record<string, string> = {};
+    for (const s of [audit.t, moodboards.t, lockup.t]) {
+      taskIds[s] = randomUUID();
+    }
+    await pool.query(
+      `INSERT INTO task (id, org_id, project_id, workstream_id, deliverable_id, title, status, priority, assignee_id, due_date, estimate_hours, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [taskIds[audit.t], orgId, projectId, wsId, dId, audit.t, 'in_progress', 'normal', designId, '2026-03-10', 8, leadId],
+    );
+    await pool.query(
+      `INSERT INTO task (id, org_id, project_id, workstream_id, deliverable_id, title, status, priority, assignee_id, due_date, estimate_hours, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [taskIds[moodboards.t], orgId, projectId, wsId, dId, moodboards.t, 'backlog', 'normal', designId, '2026-03-19', 16, leadId],
+    );
+    await pool.query(
+      `INSERT INTO task (id, org_id, project_id, workstream_id, deliverable_id, title, status, priority, assignee_id, due_date, estimate_hours, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [taskIds[lockup.t], orgId, projectId, wsId, dId, lockup.t, 'backlog', 'high', designId, '2026-03-20', 12, leadId],
+    );
+    await pool.query('INSERT INTO task_dependency (task_id, depends_on) VALUES ($1,$2)', [
+      taskIds[lockup.t], taskIds[moodboards.t],
+    ]);
+
+    await pool.query(
+      'INSERT INTO comment (id, org_id, target_type, target_id, body, created_by) VALUES ($1,$2,$3,$4,$5,$6)',
+      [randomUUID(), orgId, 'project', projectId, 'Kickoff settled on 3 exploration lanes.', amId],
+    );
+    await pool.query('INSERT INTO project_role (project_id, person_id, role) VALUES ($1,$2,$3)', [
+      projectId, leadId, 'production_lead',
+    ]);
+    console.log('phase-3 production data seeded');
   }
 
   await pool.end();

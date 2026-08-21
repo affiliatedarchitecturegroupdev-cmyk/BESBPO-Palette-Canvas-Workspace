@@ -1,5 +1,5 @@
 import { currentEmail, agencies, brands, templates } from '@/lib/api';
-import { API_URL } from '@/lib/config';
+import { BROWSER_API } from '@/lib/config';
 import BriefForm from './BriefForm';
 
 export default async function NewBriefPage() {
@@ -23,7 +23,7 @@ export default async function NewBriefPage() {
         from the start.
       </p>
       <BriefForm
-        apiUrl={API_URL}
+        apiUrl={BROWSER_API}
         email={email}
         agencies={agencyRes}
         brands={brandRes}

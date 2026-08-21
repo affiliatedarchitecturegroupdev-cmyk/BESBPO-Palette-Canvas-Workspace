@@ -259,6 +259,138 @@ async function main() {
     });
     check('status transition to production', statusMove.status === 201 && (statusMove.json as { status: string }).status === 'production');
 
+    console.log('e2e: phase 3 production workspace');
+    const clientTask = await api(base, '/tasks', {
+      email: 'client@test.example',
+      method: 'POST',
+      body: { projectId: project.id, title: 'denied' },
+    });
+    check('client cannot create tasks (403)', clientTask.status === 403);
+
+    const ws = await api(base, `/tasks/${project.id}/workstreams`, {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: { name: 'Logo' },
+    });
+    check('workstream created', ws.status === 201);
+    const wsId = (ws.json as { id: string }).id;
+
+    const dl = await api(base, `/deliverables/project/${project.id}`, {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: { name: 'Primary logo', deliverableType: 'logo', workstreamId: wsId, dueDate: '2026-10-01' },
+    });
+    check('deliverable created', dl.status === 201);
+    const dlId = (dl.json as { id: string }).id;
+
+    const t1 = await api(base, '/tasks', {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: {
+        projectId: project.id,
+        title: 'Research',
+        status: 'backlog',
+        assigneeId: personRows.rows[0].id,
+        estimateHours: 6,
+        deliverableId: dlId,
+      },
+    });
+    check('task created', t1.status === 201);
+    const t1Id = (t1.json as { id: string }).id;
+
+    const t2 = await api(base, '/tasks', {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: { projectId: project.id, title: 'Moodboards', status: 'backlog', estimateHours: 12, dueDate: '2026-09-20' },
+    });
+    const t2Id = (t2.json as { id: string }).id;
+
+    const dep = await api(base, `/tasks/${t1Id}/dependencies`, {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: { dependsOn: t2Id },
+    });
+    check('dependency added', dep.status === 201);
+
+    const blocked = await api(base, `/tasks/${t1Id}`, {
+      email: 'lead@test.example',
+      method: 'PATCH',
+      body: { status: 'done' },
+    });
+    check('cannot close task with unfinished dependency (400)', blocked.status === 400);
+
+    const doneDep = await api(base, `/tasks/${t2Id}`, {
+      email: 'lead@test.example',
+      method: 'PATCH',
+      body: { status: 'done' },
+    });
+    check('blocking dependency completed', doneDep.status === 200, String(doneDep.status));
+    const unblocked = await api(base, `/tasks/${t1Id}`, {
+      email: 'lead@test.example',
+      method: 'PATCH',
+      body: { status: 'done' },
+    });
+    check('task closes once dependency done', unblocked.status === 200, String(unblocked.status));
+
+    const assignNotif = await api(base, '/notifications', { email: 'lead@test.example' });
+    const kinds = ((assignNotif.json as { items: Array<{ kind: string }> }).items ?? []).map((n) => n.kind);
+    check('assignment + status notifications emitted',
+      kinds.includes('task_assigned') && kinds.includes('status_changed'));
+
+    const cal = await api(base, `/tasks/project/${project.id}/calendar`, { email: 'lead@test.example' });
+    check('calendar view returns due-dated tasks', Array.isArray(cal.json) && (cal.json as unknown[]).length >= 1);
+
+    const board = await api(base, `/tasks/project/${project.id}`, { email: 'am@test.example' });
+    check('board groups by status',
+      (board.json as { columns: Record<string, unknown> }).columns !== undefined);
+
+    console.log('e2e: comments + mentions');
+    const comment = await api(base, '/comments', {
+      email: 'am@test.example',
+      method: 'POST',
+      body: {
+        targetType: 'task',
+        targetId: t1Id,
+        body: 'Looks good — flagging for review',
+        mentions: [personRows.rows[0].id],
+      },
+    });
+    check('comment created', comment.status === 201);
+    const afterMention = await api(base, '/notifications', { email: 'lead@test.example' });
+    check('mention notification delivered',
+      ((afterMention.json as { items: Array<{ kind: string }> }).items ?? []).some((n) => n.kind === 'mentioned'));
+
+    // @FirstName in body resolves to a person id without explicit mentions
+    const bodyMention = await api(base, '/comments', {
+      email: 'am@test.example',
+      method: 'POST',
+      body: {
+        targetType: 'task',
+        targetId: t1Id,
+        body: 'second pass on this @Agency',
+      },
+    });
+    check('@name mention resolves',
+      ((bodyMention.json as { mentions: string[] }).mentions ?? []).length === 1);
+
+    const threads = await api(base, `/comments/task/${t1Id}`, { email: 'lead@test.example' });
+    check('task thread readable', Array.isArray(threads.json) && (threads.json as unknown[]).length === 2);
+
+    console.log('e2e: workload basics');
+    const time = await api(base, `/workload/tasks/${t1Id}/time`, {
+      email: 'lead@test.example',
+      method: 'POST',
+      body: { hours: 3.5, note: 'research pass 1' },
+    });
+    check('time entry logged', time.status === 201, JSON.stringify(time.json));
+    const workload = await api(base, '/workload', { email: 'lead@test.example' });
+    const row = (workload.json as Array<{ person_id: string; logged_hours: string }>).find(
+      (w) => w.person_id === personRows.rows[0].id,
+    );
+    check('workload aggregates logged hours', !!row && Number(row.logged_hours) >= 3.5);
+    const workloadDenied = await api(base, '/workload', { email: 'client@test.example' });
+    check('client cannot read workload (403)', workloadDenied.status === 403);
+
     const audit = await api(base, '/audit', { email: 'ops@test.example' });
     const actions = (audit.json as Array<{ action: string }>).map((a) => a.action);
     check('audit captured conversions and status change',

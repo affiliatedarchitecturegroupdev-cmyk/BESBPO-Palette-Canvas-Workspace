@@ -147,3 +147,121 @@ export interface Template {
 export async function templates(email: string | null) {
   return api<Template[]>('/templates', email);
 }
+
+/* ---------- Phase 3: production workspace ---------- */
+
+export interface Task {
+  id: string;
+  project_id: string;
+  workstream_id: string | null;
+  deliverable_id: string | null;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  assignee_id: string | null;
+  due_date: string | null;
+  estimate_hours: number | null;
+  sla_target: string | null;
+  custom_fields: Record<string, unknown>;
+  position: number;
+  created_by: string;
+}
+
+export interface Board {
+  columns: Record<string, string[]>;
+  tasks: Task[];
+}
+
+export async function board(email: string | null, projectId: string) {
+  return api<Board>(`/tasks/project/${projectId}`, email);
+}
+
+export async function calendar(email: string | null, projectId: string) {
+  return api<Array<Pick<Task, 'id' | 'title' | 'due_date' | 'status' | 'assignee_id' | 'priority'>>>(
+    `/tasks/project/${projectId}/calendar`,
+    email,
+  );
+}
+
+export interface Workstream {
+  id: string;
+  project_id: string;
+  name: string;
+  status: string;
+}
+
+export async function workstreams(email: string | null, projectId: string) {
+  return api<Workstream[]>(`/tasks/${projectId}/workstreams`, email);
+}
+
+export interface Deliverable {
+  id: string;
+  project_id: string;
+  workstream_id: string | null;
+  name: string;
+  deliverable_type: string;
+  status: string;
+  due_date: string | null;
+  assignee_id: string | null;
+}
+
+export async function deliverables(email: string | null, projectId: string) {
+  return api<Deliverable[]>(`/deliverables/project/${projectId}`, email);
+}
+
+export interface Comment {
+  id: string;
+  target_type: string;
+  target_id: string;
+  body: string;
+  mentions: string[];
+  created_by: string;
+  created_at: string;
+  resolved: boolean;
+}
+
+export async function comments(email: string | null, targetType: string, targetId: string) {
+  return api<Comment[]>(`/comments/${targetType}/${targetId}`, email);
+}
+
+export interface NotificationItem {
+  id: string;
+  kind: string;
+  target_type: string;
+  target_id: string;
+  message: string;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface Inbox {
+  items: NotificationItem[];
+  unread: number;
+}
+
+export async function notifications(email: string | null) {
+  return api<Inbox>('/notifications', email);
+}
+
+export interface WorkloadRow {
+  person_id: string;
+  name: string;
+  open_tasks: number;
+  estimated_hours: number;
+  logged_hours: number;
+}
+
+export async function workload(email: string | null) {
+  return api<WorkloadRow[]>('/workload', email);
+}
+
+export interface TaskDetail {
+  checklist: { id: string; label: string; done: boolean }[];
+  dependencies: { blocks: string[]; blocked_by: string[] };
+  collaborators: string[];
+}
+
+export async function taskDetail(email: string | null, id: string) {
+  return api<TaskDetail>(`/tasks/${id}`, email);
+}
