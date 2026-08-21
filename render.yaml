@@ -1,0 +1,31 @@
+# Render Blueprint — Palette Canvas Workspace
+# Phase 1 foundation: web frontend, API, and a shared Postgres for later phases.
+# Datastores are intentionally declared now so Phase 2+ can plug in identity and audit.
+
+services:
+  - type: web
+    name: pcw-web
+    runtime: node
+    # Build only the web app workspace with production deps
+    buildCommand: npm install --workspaces && npm run build -w @palette-canvas/web
+    startCommand: npm run start -w @palette-canvas/web
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  - type: web
+    name: pcw-api
+    runtime: node
+    buildCommand: npm install --workspaces && npm run build -w @palette-canvas/api
+    startCommand: node apps/api/dist/main.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+
+databases:
+  - name: pcw-postgres
+    databaseName: palette_canvas
+    user: palette_canvas
+    plan: starter

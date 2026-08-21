@@ -1,0 +1,23 @@
+:root {
+  --ink: #f2ead9;
+  --ink-dim: #9a8f7c;
+  --ink-faint: #5f574a;
+  --paper: #16130f;
+  --paper-raise: #1e1a15;
+  --line: #2c2620;
+  --accent: #e4572e;
+  --accent-soft: #f3a712;
+  --status-intake: #5ca4d6;
+  --status-in-progress: #f3a712;
+  --status-done: #79c48d;
+  --serif: Georgia, serif;
+  --mono: 'IBM Plex Mono', monospace;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 15px;
+}
