@@ -1,4 +1,12 @@
-import { Role, VisibilityLevel, UserContext, canSeeVisibility } from '../src';
+import {
+  Role,
+  VisibilityLevel,
+  UserContext,
+  canSeeVisibility,
+  Capability,
+  can,
+  capabilitiesOf,
+} from '../src';
 
 function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
   return {
@@ -38,6 +46,30 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
   const user = ctx([Role.ClientApprover], [VisibilityLevel.ClientShared]);
   if (!canSeeVisibility(user, VisibilityLevel.ClientShared)) {
     throw new Error('Scoped client approver should see client-shared');
+  }
+}
+
+/* Phase 2 capability matrix checks */
+
+// Roles without manage capabilities
+{
+  if (can([Role.ClientApprover], Capability.IntakeTriage)) {
+    throw new Error('client approver must not triage');
+  }
+}
+{
+  if (can([Role.ThirdPartyVendor], Capability.AuditRead)) {
+    throw new Error('vendor must not read audit');
+  }
+}
+{
+  if (!can([Role.AccountManager], Capability.IntakeConvert)) {
+    throw new Error('account manager must convert briefs');
+  }
+}
+{
+  if (capabilitiesOf([Role.ClientApprover]).length !== 1) {
+    throw new Error('client approver has only projects.read');
   }
 }
 

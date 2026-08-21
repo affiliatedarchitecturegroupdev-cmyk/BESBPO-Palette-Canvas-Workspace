@@ -22,9 +22,13 @@
         "name": "next"
       }
     ],
+    "baseUrl": ".",
     "paths": {
       "next": [
         "./node_modules/next"
+      ],
+      "@/*": [
+        "./*"
       ]
     }
   },

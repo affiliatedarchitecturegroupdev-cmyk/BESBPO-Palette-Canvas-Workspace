@@ -89,3 +89,92 @@ export interface AuditEvent {
   timestamp: string; // ISO 8601
   metadata?: Record<string, unknown>;
 }
+
+/* ------------------------------------------------------------------ */
+/* Phase 2: capability-based policy + tenancy scoping                  */
+/* ------------------------------------------------------------------ */
+
+/** Action-level capabilities the policy layer checks. */
+export enum Capability {
+  DirectoryRead = 'directory.read',
+  DirectoryManage = 'directory.manage',
+  IntakeCreate = 'intake.create',
+  IntakeTriage = 'intake.triage',
+  IntakeConvert = 'intake.convert',
+  ProjectsRead = 'projects.read',
+  ProjectsManage = 'projects.manage',
+  TemplatesRead = 'templates.read',
+  TemplatesManage = 'templates.manage',
+  AuditRead = 'audit.read',
+  IdentityGrant = 'identity.grant',
+}
+
+/** Which roles hold which capabilities (PDF section 1 role table). */
+export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
+  [Role.PlatformOwner]: Object.values(Capability),
+  [Role.OperationsDirector]: [
+    Capability.DirectoryRead,
+    Capability.IntakeCreate,
+    Capability.IntakeTriage,
+    Capability.IntakeConvert,
+    Capability.ProjectsRead,
+    Capability.ProjectsManage,
+    Capability.TemplatesRead,
+    Capability.TemplatesManage,
+    Capability.AuditRead,
+    Capability.IdentityGrant,
+  ],
+  [Role.AccountManager]: [
+    Capability.DirectoryRead,
+    Capability.DirectoryManage,
+    Capability.IntakeCreate,
+    Capability.IntakeTriage,
+    Capability.IntakeConvert,
+    Capability.ProjectsRead,
+    Capability.ProjectsManage,
+    Capability.TemplatesRead,
+  ],
+  [Role.ProductionLead]: [
+    Capability.DirectoryRead,
+    Capability.IntakeTriage,
+    Capability.ProjectsRead,
+    Capability.ProjectsManage,
+  ],
+  [Role.CreativeContributor]: [Capability.ProjectsRead],
+  [Role.QualityReviewer]: [Capability.ProjectsRead],
+  [Role.AgencyAdmin]: [Capability.DirectoryRead, Capability.IntakeCreate, Capability.ProjectsRead],
+  [Role.AgencyContributor]: [Capability.DirectoryRead, Capability.IntakeCreate, Capability.ProjectsRead],
+  [Role.ClientApprover]: [Capability.ProjectsRead],
+  [Role.ThirdPartyVendor]: [Capability.ProjectsRead],
+  [Role.FinanceUser]: [Capability.DirectoryRead, Capability.ProjectsRead],
+};
+
+/** Union of capabilities across a user's roles. */
+export function capabilitiesOf(roles: Role[]): Capability[] {
+  const set = new Set<Capability>();
+  for (const r of roles) {
+    for (const c of ROLE_CAPABILITIES[r] ?? []) set.add(c);
+  }
+  return [...set];
+}
+
+/** True when any of the actor's roles grants `capability`. */
+export function can(roles: Role[], capability: Capability): boolean {
+  return roles.some((r) => (ROLE_CAPABILITIES[r] ?? []).includes(capability));
+}
+
+/** Project lifecycle stages from the planning document (section 2). */
+export enum ProjectStatus {
+  Intake = 'intake',
+  Qualified = 'qualified',
+  Planning = 'planning',
+  Production = 'production',
+  InternalQa = 'internal_qa',
+  Proofing = 'proofing',
+  ChangeControl = 'change_control',
+  Handover = 'handover',
+  Done = 'done',
+  Blocked = 'blocked',
+}
+
+export const PROJECT_STATUSES: readonly ProjectStatus[] = Object.values(ProjectStatus);

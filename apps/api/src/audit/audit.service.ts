@@ -1,29 +1,47 @@
 import { Injectable } from '@nestjs/common';
-import type { AuditEvent } from '@palette-canvas/shared';
+import { randomUUID } from 'crypto';
+import { Database } from '../db/database';
+
+export interface AuditRow {
+  id: string;
+  org_id: string;
+  actor: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  metadata: Record<string, unknown>;
+  at: string;
+}
 
 /**
- * In-memory audit event log — foundation for the audit trail required
- * by the planning document. Replace with Postgres-backed storage in Phase 2.
+ * Postgres-backed audit trail (append-only). High-risk actions — role grants,
+ * template changes, status transitions, conversions — must log here per the
+ * planning document's auditability baseline.
  */
 @Injectable()
 export class AuditService {
-  private readonly events: AuditEvent[] = [];
+  constructor(private readonly db: Database) {}
 
-  log(event: Omit<AuditEvent, 'id' | 'timestamp'>): AuditEvent {
-    const record: AuditEvent = {
-      ...event,
-      id: this.generateId(),
-      timestamp: new Date().toISOString(),
-    };
-    this.events.push(record);
-    return record;
+  async log(
+    orgId: string,
+    actor: string,
+    action: string,
+    targetType: string,
+    targetId: string,
+    metadata: Record<string, unknown> = {},
+  ): Promise<AuditRow> {
+    return this.db.one<AuditRow>(
+      `INSERT INTO audit_event (id, org_id, actor, action, target_type, target_id, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [randomUUID(), orgId, actor, action, targetType, targetId, JSON.stringify(metadata)],
+    );
   }
 
-  findAll(): AuditEvent[] {
-    return [...this.events];
-  }
-
-  private generateId(): string {
-    return Math.random().toString(36).slice(2, 10);
+  async findAll(orgId: string): Promise<AuditRow[]> {
+    const { rows } = await this.db.query<AuditRow>(
+      'SELECT * FROM audit_event WHERE org_id = $1 ORDER BY at DESC LIMIT 500',
+      [orgId],
+    );
+    return rows;
   }
 }

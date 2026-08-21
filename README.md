@@ -2,9 +2,18 @@
 
 Monorepo for the Palette Canvas production workspace (see `Instructions.txt` and `docs/`).
 
-## Phase 1 — foundation skeleton
+## Phase 2 — intake and project setup (current)
 
-This phase delivers a secure, deployable workspace skeleton per the planning document:
+Real-persistence implementation of the planning-document Phase 2: structured
+brief builder, triage with duplicates detection, client/agency records,
+service templates, milestones, role assignment, and project home. See
+[`docs/phase-2.md`](docs/phase-2.md).
+
+- `apps/api` — NestJS domain API backed by Postgres (pg driver + runner-managed migrations)
+- `apps/web` — role-aware Next.js workspace shell (dev user switcher)
+- Postgres 17 in Docker is required; seed via `npm run seed -w @palette-canvas/api`
+
+## Phase 1 — foundation skeleton
 
 - Monorepo with `apps/web` (Next.js workspace shell), `apps/api` (NestJS foundation), and shared packages.
 - `packages/design-tokens` — color/typography/spacing as single source of truth for UI.
@@ -14,8 +23,8 @@ This phase delivers a secure, deployable workspace skeleton per the planning doc
 
 ## Workspace layout
 
-- `apps/web` — minimal Next.js workspace shell using design tokens
-- `apps/api` — NestJS skeleton with in-memory audit + tenancy/permission rules
+- `apps/web` — role-aware Next.js workspace shell using design tokens
+- `apps/api` — NestJS domain API with Postgres persistence and capability-gated routes
 - `packages/design-tokens` — design tokens for Palette Canvas UI
 - `packages/shared` — permission matrix, hierarchy types, and core dtos
 - `prototypes/color-tool` — preserved prototype (React + Vite) as reference
@@ -25,11 +34,26 @@ This phase delivers a secure, deployable workspace skeleton per the planning doc
 ```sh
 npm install
 npm run build            # build all workspaces
+
+docker run -d -p 5432:5432 --name pc-pg \
+  -e POSTGRES_USER=palette_canvas -e POSTGRES_PASSWORD=devpassword \
+  -e POSTGRES_DB=palette_canvas postgres:17
+
+npm run seed -w @palette-canvas/api
+npm run start -w @palette-canvas/api     # API on :3001
+npm run start -w @palette-canvas/web     # web on :12000
+```
+
+## Tests
+
+```sh
+npm run test            # shared predicate tests + api e2e (needs Postgres)
 ```
 
 ## Documents
 
 - [`Instructions.txt`](Instructions.txt)
+- [`docs/phase-2.md`](docs/phase-2.md)
 - [`docs/permissions.md`](docs/permissions.md)
 - [`docs/work-hierarchy.md`](docs/work-hierarchy.md)
 - [`docs/decisions/ADR-0001.md`](docs/decisions/ADR-0001.md)

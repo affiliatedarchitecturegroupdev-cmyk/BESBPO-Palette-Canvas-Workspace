@@ -1,59 +1,61 @@
-import { Role, VisibilityLevel } from '@palette-canvas/shared';
+import { currentEmail, inbox, projects, agencies } from '@/lib/api';
 
-export default function Page() {
+export default async function Home() {
+  const email = await currentEmail();
+  const [inboxRes, projectsRes, agencyRes] = await Promise.all([
+    inbox(email),
+    projects(email),
+    agencies(email),
+  ]);
+  const briefs = Array.isArray(inboxRes) ? inboxRes : [];
+  const projectList = Array.isArray(projectsRes) ? projectsRes : [];
+  const agencyList = Array.isArray(agencyRes) ? agencyRes : [];
+  const openBriefs = briefs.filter((b) => b.status === 'inbox');
+
+  if (!email) {
+    return (
+      <main>
+        <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500 }}>Palette Canvas Workspace</h1>
+        <p style={{ color: 'var(--ink-dim)' }}>
+          Phase 2 — intake and project setup. Select a user above to open the role-aware view.
+        </p>
+      </main>
+    );
+  }
+
   return (
-    <main style={{ padding: 48, maxWidth: 1100, margin: '0 auto' }}>
-      <header>
-        <p style={{ letterSpacing: '0.35em', color: 'var(--accent)', fontSize: 11, border: '1px solid var(--accent)', padding: '3px 10px', display: 'inline-block' }}>
-          PALETTE CANVAS
-        </p>
-        <h1 style={{ fontFamily: 'var(--serif)', fontSize: 48, margin: '16px 0 8px', fontWeight: 500 }}>
-          Workspace Foundation
-        </h1>
-        <p style={{ color: 'var(--ink-dim)', maxWidth: 640 }}>
-          Workspace shell for the Palette Canvas production operating system.
-          This is Phase 1 of the planning document — the foundation on which
-          identity, tenancy, and permission gates are built in later phases.
-        </p>
-      </header>
-
-      <section style={{ marginTop: 40, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24 }}>
-        <div style={{ border: '1px solid var(--line)', background: 'var(--paper-raise)', padding: 24 }}>
-          <h2 style={{ marginTop: 0, fontFamily: 'var(--serif)' }}>Roles</h2>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', color: 'var(--ink-dim)' }}>
-            {Object.values(Role).map((r) => (
-              <li key={r} style={{ padding: '4px 0', fontSize: 13 }}>
-                {r}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div style={{ border: '1px solid var(--line)', background: 'var(--paper-raise)', padding: 24 }}>
-          <h2 style={{ marginTop: 0, fontFamily: 'var(--serif)' }}>Visibility Levels</h2>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', color: 'var(--ink-dim)' }}>
-            {Object.values(VisibilityLevel).map((v) => (
-              <li key={v} style={{ padding: '4px 0', fontSize: 13 }}>
-                {v}
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div style={{ border: '1px solid var(--line)', background: 'var(--paper-raise)', padding: 24 }}>
-          <h2 style={{ marginTop: 0, fontFamily: 'var(--serif)' }}>Foundation Outputs</h2>
-          <ul style={{ margin: 0, padding: 0, listStyle: 'none', color: 'var(--ink-dim)' }}>
-            <li style={{ padding: '4px 0', fontSize: 13 }}>Design tokens</li>
-            <li style={{ padding: '4px 0', fontSize: 13 }}>Permission matrix</li>
-            <li style={{ padding: '4px 0', fontSize: 13 }}>Audit log (in-memory)</li>
-            <li style={{ padding: '4px 0', fontSize: 13 }}>NestJS API skeleton</li>
-          </ul>
-        </div>
+    <main>
+      <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, marginTop: 0 }}>Workspace overview</h1>
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+          gap: 20,
+          marginTop: 20,
+        }}
+      >
+        <Card title="Intake inbox" value={briefs.length.toString()} detail={`${openBriefs.length} awaiting triage`} href="/intake" />
+        <Card title="Active projects" value={projectList.length.toString()} detail={projectList[0]?.status ?? '—'} href="/projects" />
+        <Card title="Agencies" value={agencyList.length.toString()} detail="scoped to your access" href="/directory" />
       </section>
-
-      <footer style={{ marginTop: 64, color: 'var(--ink-faint)', fontSize: 12, borderTop: '1px solid var(--line)', paddingTop: 18 }}>
-        Palette Canvas Workspace — Phase 1 foundation
-      </footer>
     </main>
+  );
+}
+
+function Card({ title, value, detail, href }: { title: string; value: string; detail: string; href: string }) {
+  return (
+    <a href={href} style={{ textDecoration: 'none' }}>
+      <div
+        style={{
+          border: '1px solid var(--line)',
+          background: 'var(--paper-raise)',
+          padding: 24,
+        }}
+      >
+        <div style={{ fontSize: 12, color: 'var(--ink-faint)', textTransform: 'uppercase' }}>{title}</div>
+        <div style={{ fontSize: 42, fontFamily: 'var(--serif)', margin: '8px 0' }}>{value}</div>
+        <div style={{ fontSize: 12, color: 'var(--ink-dim)' }}>{detail}</div>
+      </div>
+    </a>
   );
 }

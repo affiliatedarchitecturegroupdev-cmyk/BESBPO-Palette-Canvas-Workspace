@@ -2,5 +2,6 @@ node_modules/
 dist/
 .next/
 .test-dist/
+.seed-dist/
 *.log
 *.tsbuildinfo

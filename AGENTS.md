@@ -38,3 +38,21 @@ A change may only land on `main` when it satisfies:
 ## Sizing rule of thumb
 
 Prefer small, well-specified slices: "Add board permission tests for vendor and agency roles" over "Rewrite delivery module." The PDF calls out small slices with enforced CODEOWNER review as the mitigation for agentic-delivery risk.
+
+## Operational knowledge (Phase 2)
+
+- Postgres is required for API tests and boot: local Docker container
+  `pc-pg` (`postgres:17`, user `palette_canvas`, password `devpassword`, db
+  `palette_canvas`). Docker daemon may need `sudo dockerd -g` style bootstrap.
+- Migrations live in `apps/api/migrations/` and run at boot, in seed, and in
+  e2e, via the idempotent runner in `apps/api/src/db/migrate.ts`. Path
+  discovery uses `apps/api/src/db/paths.ts` (`migrationsDir`).
+- Dev auth: endpoints resolve the `x-user-email` header against `person` +
+  `role_binding` rows; the web app forwards cookie `pc_user_email` as that
+  header (Phase 5 hardening replaces with SSO).
+- Permission gates are capability-based: `authz.require` /
+  `authz.requireScope` (see `apps/api/src/identity/authz.service.ts`);
+  capabilities map is in `packages/shared` (`_ROLE_CAPABILITIES`).
+- e2e test `apps/api/test/e2e.test.ts` truncates all domain tables first —
+  safe to run repeatedly.
+- Run gates: `npm run build` then `npm run test` at the workspace root.

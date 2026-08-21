@@ -1,20 +1,21 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
-import { AuditService } from './audit.service';
-import type { AuditEvent } from '@palette-canvas/shared';
+import { Controller, Get, Headers, UnauthorizedException } from '@nestjs/common';
+import { Capability } from '@palette-canvas/shared';
+import { AuditService, AuditRow } from './audit.service';
+import { IdentityService } from '../identity/identity.service';
+import { AuthzService } from '../identity/authz.service';
 
 @Controller('audit')
 export class AuditController {
-  constructor(private readonly audit: AuditService) {}
+  constructor(
+    private readonly audit: AuditService,
+    private readonly identity: IdentityService,
+    private readonly authz: AuthzService,
+  ) {}
 
   @Get()
-  list(): AuditEvent[] {
-    return this.audit.findAll();
-  }
-
-  @Post()
-  create(@Body() body: Omit<AuditEvent, 'id' | 'timestamp'>): AuditEvent {
-    // In the real system, high-risk actions must pass through here.
-    // This is the foundation endpoint only.
-    return this.audit.log(body);
+  async list(@Headers('x-user-email') email: string | undefined): Promise<AuditRow[]> {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.AuditRead);
+    return this.audit.findAll(ctx.orgId);
   }
 }
