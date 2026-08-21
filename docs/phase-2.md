@@ -37,6 +37,9 @@ npm run start -w @palette-canvas/web   # web on :12000
 - `npm run test -w @palette-canvas/api` — 23 e2e checks against real Postgres
   (intake → triage → conversion → project home + permission negatives)
 
+The e2e suite truncates all domain tables for a clean run; re-run
+`npm run seed -w @palette-canvas/api` afterward to restore demo data.
+
 ## Role-aware web shell
 
 `apps/web` uses server components that forward the user cookie
