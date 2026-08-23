@@ -18,6 +18,8 @@ const links = [
   { href: '/capacity', label: 'Capacity' },
   { href: '/reports', label: 'Reports' },
   { href: '/integrations', label: 'Integrations' },
+  { href: '/commercial', label: 'Commercial' },
+  { href: '/audit', label: 'Audit' },
   { href: '/settings/sso', label: 'SSO' },
   { href: '/notifications', label: 'Inbox' },
 ];

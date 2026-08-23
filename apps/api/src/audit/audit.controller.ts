@@ -1,4 +1,4 @@
-import { Controller, Get, Headers, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, Headers, Query } from '@nestjs/common';
 import { Capability } from '@palette-canvas/shared';
 import { AuditService, AuditRow } from './audit.service';
 import { IdentityService } from '../identity/identity.service';
@@ -13,9 +13,20 @@ export class AuditController {
   ) {}
 
   @Get()
-  async list(@Headers('x-user-email') email: string | undefined): Promise<AuditRow[]> {
+  async list(
+    @Headers('x-user-email') email: string | undefined,
+    @Query('action') action?: string,
+    @Query('actor') actor?: string,
+    @Query('targetType') targetType?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('q') q?: string,
+  ): Promise<AuditRow[]> {
     const ctx = await this.identity.resolve(email);
     this.authz.require(ctx, Capability.AuditRead);
+    if (action || actor || targetType || from || to || q) {
+      return this.audit.search(ctx.orgId, { action, actor, targetType, from, to, q });
+    }
     return this.audit.findAll(ctx.orgId);
   }
 }

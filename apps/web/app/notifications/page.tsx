@@ -1,6 +1,7 @@
 import { currentEmail, notifications } from '@/lib/api';
 import { BROWSER_API } from '@/lib/config';
 import MarkAllRead from './MarkAllRead';
+import LiveFeed from './LiveFeed';
 
 /** Consolidated notification inbox: mentions, assignments, status changes. */
 export default async function NotificationsPage() {
@@ -59,6 +60,7 @@ export default async function NotificationsPage() {
           <li style={{ fontSize: 13, color: 'var(--ink-faint)' }}>Nothing here yet.</li>
         )}
       </ul>
+      <LiveFeed apiUrl={BROWSER_API} email={email} />
     </main>
   );
 }
