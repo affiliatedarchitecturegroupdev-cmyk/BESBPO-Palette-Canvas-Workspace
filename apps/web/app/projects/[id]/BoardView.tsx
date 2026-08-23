@@ -93,6 +93,7 @@ export default function BoardView({
       </div>
       {canWrite && (
         <select
+          aria-label={`Status for ${t.title}`}
           value={t.status}
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => void move(t.id, e.target.value)}
@@ -112,7 +113,7 @@ export default function BoardView({
     <section style={{ marginTop: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0, fontSize: 16 }}>Work</h2>
-        <nav style={{ display: 'flex', gap: 4 }}>
+        <nav aria-label="Work view" style={{ display: 'flex', gap: 4 }}>
           {(['board', 'list', 'calendar'] as const).map((v) => (
             <button
               key={v}

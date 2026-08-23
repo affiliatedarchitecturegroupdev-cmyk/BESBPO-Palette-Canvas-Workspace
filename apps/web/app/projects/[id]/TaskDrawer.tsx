@@ -79,7 +79,7 @@ export default function TaskDrawer({
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h3 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>{task.title}</h3>
-        <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 16, cursor: 'pointer' }}>
+        <button onClick={onClose} aria-label="Close task" style={{ border: 'none', background: 'none', fontSize: 16, cursor: 'pointer' }}>
           ✕
         </button>
       </div>
@@ -114,6 +114,7 @@ export default function TaskDrawer({
                 value={newItem}
                 onChange={(e) => setNewItem(e.target.value)}
                 placeholder="add item"
+                aria-label="New checklist item"
                 style={{ flex: 1, fontSize: 12, padding: '4px 6px' }}
               />
               <button
@@ -148,6 +149,7 @@ export default function TaskDrawer({
                 value={hours}
                 onChange={(e) => setHours(e.target.value)}
                 placeholder="hours, e.g. 1.5"
+                aria-label="Hours to log"
                 style={{ flex: 1, fontSize: 12, padding: '4px 6px' }}
               />
               <button
@@ -185,6 +187,7 @@ export default function TaskDrawer({
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="comment…"
+              aria-label="New comment"
               style={{ flex: 1, fontSize: 12, padding: '4px 6px' }}
             />
             <button

@@ -109,6 +109,7 @@ export default function ProofingView({
                 value={qaLabel[v.id] ?? ''}
                 onChange={(e) => setQaLabel((s) => ({ ...s, [v.id]: e.target.value }))}
                 placeholder="add QA item"
+                aria-label={`New QA item for version ${v.version}`}
                 style={{ padding: '4px 8px', border: '1px solid var(--line)', background: 'var(--paper)', color: 'var(--ink)', font: 'inherit', fontSize: 11 }}
               />
             )}
@@ -152,12 +153,14 @@ export default function ProofingView({
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="label"
+              aria-label="New version label"
               style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--line)', background: 'var(--paper)', color: 'var(--ink)', font: 'inherit', fontSize: 12 }}
             />
             <input
               value={uri}
               onChange={(e) => setUri(e.target.value)}
               placeholder="uri"
+              aria-label="New version URI"
               style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--line)', background: 'var(--paper)', color: 'var(--ink)', font: 'inherit', fontSize: 12 }}
             />
             <button

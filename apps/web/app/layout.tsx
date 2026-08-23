@@ -32,7 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body>
-        <nav
+        <header
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -42,6 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             background: 'var(--paper-raise)',
           }}
         >
+          <nav aria-label="Primary" style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
           <span
             style={{
               letterSpacing: '0.3em',
@@ -80,7 +81,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             )}
             <UserSwitcher emails={userList.map((u) => u.email)} current={email} />
           </div>
-        </nav>
+          </nav>
+        </header>
         <div style={{ padding: '32px 48px', maxWidth: 1200, margin: '0 auto' }}>{children}</div>
       </body>
     </html>

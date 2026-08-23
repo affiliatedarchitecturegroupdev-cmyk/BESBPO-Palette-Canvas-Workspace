@@ -21,6 +21,7 @@ export default function UserSwitcher({
 
   return (
     <select
+      aria-label="Switch user"
       value={value}
       onChange={(e) => {
         document.cookie = e.target.value
