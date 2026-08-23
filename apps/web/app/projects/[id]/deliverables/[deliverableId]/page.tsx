@@ -125,12 +125,12 @@ export default async function DeliverableProofingPage({ params }: { params: Prom
               <form style={{ display: 'flex', gap: 6, marginTop: 10 }} action={proposeChange}>
                 <input
                   name="title"
-                  placeholder="change request title"
+                  aria-label="change request title" placeholder="change request title"
                   style={{ flex: 1, padding: '5px 8px', border: '1px solid var(--line)', background: 'var(--paper)', color: 'var(--ink)', font: 'inherit', fontSize: 12 }}
                 />
                 <input
                   name="hours"
-                  placeholder="hours"
+                  aria-label="hours" placeholder="hours"
                   inputMode="numeric"
                   style={{ width: 70, padding: '5px 8px', border: '1px solid var(--line)', background: 'var(--paper)', color: 'var(--ink)', font: 'inherit', fontSize: 12 }}
                 />
