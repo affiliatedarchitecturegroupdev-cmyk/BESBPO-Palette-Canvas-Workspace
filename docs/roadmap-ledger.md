@@ -34,16 +34,16 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P6-04 | Integrations hub | done | PR #10 | webhook CRUD + fire-and-forget emit on approval events; `/integrations` page; e2e 80 → permission tests pass | V1; retries/DLQ deferred to P6-11 |
 | P6-05 | Richer proofing | done | PR #10 | annotations + resolve + version compare APIs; e2e 80 → permission tests pass | V1 |
 | P6-06 | SSO/SCIM | done | PR #10 | SSO config CRUD + SCIM user provisioning (token-gated); `/settings/sso` page; e2e 80 → permission tests pass | V1; OIDC dance deferred |
-| P6-07 | Commercial controls | todo | — | rate cards + PO + invoice | V1 |
-| P6-08 | Automation builder | todo | — | rules DSL | V1 |
-| P6-09 | Live updates (SSE) | todo | — | authenticated channel | infra |
-| P6-10 | Object storage | todo | — | S3 signed URLs | infra |
-| P6-11 | Worker queue | todo | — | Redis queue + DLQ | infra |
-| P6-12 | Media workers | todo | — | thumbnail/transcode | infra |
-| P6-13 | AI opt-in guards | todo | — | per-tenant opt-in | infra |
-| P6-14 | Legal holds + retention | todo | — | legal_hold blocks purge | infra |
-| B-01 | Audit explorer UI | todo | — | searchable audit table | backlog |
-| B-02 | Permissions reviews | todo | — | review workflow | backlog |
+| P6-07 | Commercial controls | done | PR #12 | rate cards, estimates v1+v2 supersede, budget vs effort (delta-verified), PO fields, invoice-ready listing; `/commercial` page; e2e 132/132 | V1 |
+| P6-08 | Automation builder | done | PR #12 | rules DSL + evaluation on event bus, condition matching, notify action, automation_run recorded; e2e 132/132 | V1 |
+| P6-09 | Live updates (SSE) | done | PR #12 | authenticated `/events/stream` (org-scoped, recipient-filtered, 25s heartbeat); LiveFeed inbox client; sse frame received in e2e; anon 401 | infra |
+| P6-10 | Object storage | done | PR #12 | asset upload/list, HMAC signed URLs + expiry; round-trip byte equality + tamper 403 in e2e | disk backend V1 (S3-compatible shape) |
+| P6-11 | Worker queue | done | PR #12 | PG SKIP LOCKED queue, backoff retry, DLQ + retry, idempotent enqueue (same key returns same job); webhook delivery on queue; e2e 132/132 | fulfills P6-04 deferral; PG not Redis |
+| P6-12 | Media workers | done | PR #12 | media.inspect records PNG/JPEG/GIF/SVG dimensions into asset metadata, enqueues media.thumbnail (rendition recorded); e2e-verified | transcode deferred (external worker) |
+| P6-13 | AI opt-in guards | done | PR #12 | org ai_opt_in flag; proposals blocked while opted out (403); execute only after human decide; e2e 132/132 | V1 |
+| P6-14 | Legal holds + retention | done | PR #12 | active hold blocks purge (409), release then purge runs; retention_days policy; all audited; e2e 132/132 | V1 |
+| B-01 | Audit explorer UI | done | PR #12 | audit search API (action/actor/target/date/q) + `/audit` page; filter + free-text verified in e2e | backlog |
+| B-02 | Permissions reviews | done | PR #12 | propose/decide with separation of duties (proposer 404 on own), approved grant/revoke takes effect via role_capability_override in authz; e2e 132/132 | AccountManager gained permissions.review |
 | B-03 | Agent-attribution audit | todo | — | agent_tag column | backlog |
 | B-04 | Drift detection | todo | — | daily ledger diff | backlog |
 | B-05 | Knowledge library | todo | — | guideline landing | backlog |
