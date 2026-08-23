@@ -21,7 +21,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P2-01 | Phase 2 intake + project setup | done | `bcd0a7e` | e2e 30 → permission tests pass | converted brief → project |
 | P3-01 | Phase 3 production workspace | done | `e99e99e` → PR #1 | e2e 41 → permission tests pass | board, drawer, notifications, workload |
 | P4-01 | Phase 4 proofing, approvals, handover | done | `eb9cec9` → PR #2 | e2e 55 → permission tests pass | QA gate, client decision, handover |
-| P5-01 | Backup + restore drill tooling | done | `85f5dfc` → PR TBD | backup exit 0; drill exit 0; 27-table diff equality; e2e 55 → permission tests pass | full-schema restore; build-order fix |
+| P5-01 | Backup + restore drill tooling | done | PR #4 | backup exit 0; drill exit 0; 27-table diff equality; e2e 55 → permission tests pass | full-schema restore; build-order fix |
 | P5-02 | Load test script | todo | — | p95 < 1000 ms | pilot traffic profile |
 | P5-03 | Accessibility remediation | todo | — | audit + label sweep | inputs + landmarks |
 | P5-04 | Security remediation | todo | — | headers + error wrapper | manual audit |
@@ -53,7 +53,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 
 ### P5-01 — Backup + restore drill tooling (2026-08-23)
 
-- Branch: `p5-01-backup-restore-drill`, commit `85f5dfc` (PR TBD)
+- Branch: `p5-01-backup-restore-drill`, merged via PR #4
 - `scripts/backup.sh` — optional output-name argument so callers can predict
   the dump path; default behaviour unchanged (`pg_dump` → `ops/backups/`)
 - `scripts/restore-drill.sh` — two fixes over the PR #3 scaffold:
