@@ -1,0 +1,14 @@
+{
+  "url": "http://localhost:3001",
+  "total": 320,
+  "ok": 320,
+  "failed": 0,
+  "p50_ms": 8,
+  "p95_ms": 14,
+  "p99_ms": 41,
+  "max_ms": 56,
+  "rounds": 40,
+  "concurrency": 8,
+  "ran_at": "2026-08-23T17:15:09.346Z",
+  "pass": true
+}
