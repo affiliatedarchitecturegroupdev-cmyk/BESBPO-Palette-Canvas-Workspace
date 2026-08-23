@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import { Database } from '../db/database';
 import { VersionsService } from './versions.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 
 export interface ApprovalRow {
   id: string;
@@ -23,6 +24,7 @@ export class ApprovalsService {
     private readonly db: Database,
     private readonly versions: VersionsService,
     private readonly notifications: NotificationsService,
+    private readonly integrations: IntegrationsService,
   ) {}
 
   async list(orgId: string, versionId: string): Promise<ApprovalRow[]> {
@@ -83,6 +85,8 @@ export class ApprovalsService {
     await this.db.query('UPDATE version SET status = $1 WHERE org_id = $2 AND id = $3', [status, orgId, row.version_id]);
     // notify requester so they can triage change requests
     await this.notifications.emit(orgId, row.requested_by, `approval_${decision}`, 'approval', id, `Version decision: ${decision}`);
+    // P6-04: emit the decision to subscribed webhooks (fire-and-forget)
+    await this.integrations.emit(orgId, 'approval.decided', { approvalId: id, versionId: row.version_id, decision, decidedBy });
     return row;
   }
 

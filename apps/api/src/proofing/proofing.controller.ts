@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, Param, Post, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Post, Patch, Query } from '@nestjs/common';
 import { Capability } from '@palette-canvas/shared';
 import { VersionsService } from './versions.service';
 import { ApprovalsService } from './approvals.service';
@@ -62,6 +62,48 @@ export class ProofingController {
     const ctx = await this.identity.resolve(email);
     this.authz.require(ctx, Capability.QaWrite);
     return this.versions.checkQa(ctx.orgId, versionId, itemId, ctx.userId, body.passed, body.note);
+  }
+
+  /* P6-05: annotations + compare */
+
+  @Get('versions/:versionId/annotations')
+  async listAnnotations(@Headers('x-user-email') email: string | undefined, @Param('versionId') versionId: string) {
+    const ctx = await this.identity.resolve(email);
+    return this.versions.annotations(ctx.orgId, versionId);
+  }
+
+  @Post('versions/:versionId/annotations')
+  async addAnnotation(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('versionId') versionId: string,
+    @Body() body: { x?: number; y?: number; body: string },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.AnnotationsWrite);
+    return this.versions.addAnnotation(ctx.orgId, ctx.userId, versionId, body);
+  }
+
+  @Patch('versions/:versionId/annotations/:annotationId')
+  async resolveAnnotation(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('versionId') versionId: string,
+    @Param('annotationId') annotationId: string,
+    @Body() body: { resolved: boolean },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.AnnotationsWrite);
+    return this.versions.resolveAnnotation(ctx.orgId, versionId, annotationId, body.resolved);
+  }
+
+  @Get('deliverables/:deliverableId/compare')
+  async compare(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('deliverableId') deliverableId: string,
+    @Query('a') a: string | undefined,
+    @Query('b') b: string | undefined,
+  ) {
+    const ctx = await this.identity.resolve(email);
+    return this.versions.compare(ctx.orgId, deliverableId, a ?? '', b ?? '');
   }
 
   /* Approvals */

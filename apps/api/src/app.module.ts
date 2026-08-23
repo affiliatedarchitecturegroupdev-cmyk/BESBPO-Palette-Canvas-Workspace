@@ -32,8 +32,18 @@ import { ProofingController } from './proofing/proofing.controller';
 import { VersionsService } from './proofing/versions.service';
 import { ApprovalsService } from './proofing/approvals.service';
 import { HandoversService } from './proofing/handovers.service';
+import { CapacityController } from './capacity/capacity.controller';
+import { CapacityService } from './capacity/capacity.service';
+import { ReportsController } from './reports/reports.controller';
+import { ReportsService } from './reports/reports.service';
+import { IntegrationsController } from './integrations/integrations.controller';
+import { IntegrationsService } from './integrations/integrations.service';
+import { SsoController } from './sso/sso.controller';
+import { SsoService } from './sso/sso.service';
+import { SecurityModule } from './security/security.module';
 
 @Module({
+  imports: [SecurityModule],
   controllers: [
     AuditController,
     IdentityController,
@@ -49,6 +59,10 @@ import { HandoversService } from './proofing/handovers.service';
     NotificationsController,
     WorkloadController,
     ProofingController,
+    CapacityController,
+    ReportsController,
+    IntegrationsController,
+    SsoController,
   ],
   providers: [
     Database,
@@ -70,6 +84,10 @@ import { HandoversService } from './proofing/handovers.service';
     VersionsService,
     ApprovalsService,
     HandoversService,
+    CapacityService,
+    ReportsService,
+    IntegrationsService,
+    SsoService,
   ],
 })
 export class AppModule {}

@@ -102,5 +102,67 @@ export class VersionsService {
       [orgId, versionId],
     );
     return rows[0].total > 0 && rows[0].failed === 0;
-  } 
+  }
+
+  /* P6-05: annotated feedback pinned to a version + version compare. */
+
+  async annotations(orgId: string, versionId: string) {
+    await this.mustGet(orgId, versionId);
+    const { rows } = await this.db.query(
+      `SELECT a.id, a.x, a.y, a.body, a.resolved, a.created_at, p.name AS author
+       FROM annotation a JOIN person p ON p.id = a.author_id
+       WHERE a.org_id = $1 AND a.version_id = $2
+       ORDER BY a.created_at`,
+      [orgId, versionId],
+    );
+    return rows;
+  }
+
+  async addAnnotation(orgId: string, authorId: string, versionId: string, input: { x?: number; y?: number; body: string }) {
+    await this.mustGet(orgId, versionId);
+    return this.db.one(
+      `INSERT INTO annotation (id, org_id, version_id, author_id, x, y, body)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)
+       RETURNING id, x, y, body, resolved, created_at`,
+      [randomUUID(), orgId, versionId, authorId, input.x ?? null, input.y ?? null, input.body],
+    );
+  }
+
+  async resolveAnnotation(orgId: string, versionId: string, annotationId: string, resolved: boolean) {
+    const row = await this.db.oneOrNull(
+      `UPDATE annotation SET resolved = $4
+       WHERE org_id = $1 AND version_id = $2 AND id = $3
+       RETURNING id, resolved`,
+      [orgId, versionId, annotationId, resolved],
+    );
+    if (!row) throw new NotFoundException('annotation not found');
+    return row;
+  }
+
+  /** Compare two versions: metadata + QA tally + open annotation count each. */
+  async compare(orgId: string, deliverableId: string, aId: string, bId: string) {
+    const summarize = async (id: string) => {
+      const v = await this.mustGet(orgId, id);
+      if (v.deliverable_id !== deliverableId) throw new NotFoundException('version not in deliverable');
+      const qa = await this.db.query<{ total: string; passed: string }>(
+        'SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE passed) AS passed FROM qa_checklist WHERE org_id = $1 AND version_id = $2',
+        [orgId, id],
+      );
+      const ann = await this.db.query<{ open: string }>(
+        'SELECT COUNT(*) FILTER (WHERE NOT resolved) AS open FROM annotation WHERE org_id = $1 AND version_id = $2',
+        [orgId, id],
+      );
+      return {
+        id: v.id,
+        version: v.version,
+        label: v.label,
+        status: v.status,
+        notes: v.notes,
+        qa_total: Number(qa.rows[0].total),
+        qa_passed: Number(qa.rows[0].passed),
+        open_annotations: Number(ann.rows[0].open),
+      };
+    };
+    return { a: await summarize(aId), b: await summarize(bId) };
+  }
 }

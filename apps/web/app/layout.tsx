@@ -15,6 +15,10 @@ const links = [
   { href: '/templates', label: 'Templates' },
   { href: '/projects', label: 'Projects' },
   { href: '/workload', label: 'Workload' },
+  { href: '/capacity', label: 'Capacity' },
+  { href: '/reports', label: 'Reports' },
+  { href: '/integrations', label: 'Integrations' },
+  { href: '/settings/sso', label: 'SSO' },
   { href: '/notifications', label: 'Inbox' },
 ];
 
