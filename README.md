@@ -2,17 +2,18 @@
 
 Monorepo for the Palette Canvas production workspace (see `Instructions.txt` and `docs/`).
 
-## Phase 3 — production workspace (current)
+## Phase 4 — proofing, approvals, handover (current)
 
-Real-persistence implementation of the planning-document Phase 3: task boards
-with list/calendar views, dependencies with close-blocking, deliverables,
-workstream grouping, comments with @mentions, a notification inbox, and
-workload basics (time logging + per-person load). See
-[`docs/phase-3.md`](docs/phase-3.md).
+Real-persistence implementation of the planning-document Phase 4: versioned
+deliverable assets, internal QA checklists, client approval gates, change
+requests off rejected decisions, and a handover package readable by the
+client. See [`docs/phase-4.md`](docs/phase-4.md).
 
-- `apps/api` — NestJS domain API backed by Postgres (pg driver + runner-managed migrations)
-- `apps/web` — role-aware Next.js workspace shell (dev user switcher)
-- Postgres 17 in Docker is required; seed via `npm run seed -w @palette-canvas/api`
+## Phase 3 — production workspace
+
+Task boards with list/calendar views, dependency close-blocking, deliverables,
+workstream grouping, comments with @mentions, notification inbox, workload
+basics. See [`docs/phase-3.md`](docs/phase-3.md).
 
 ## Phase 2 — intake and project setup
 

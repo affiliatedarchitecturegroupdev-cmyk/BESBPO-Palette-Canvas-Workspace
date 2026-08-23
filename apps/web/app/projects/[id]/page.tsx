@@ -108,7 +108,11 @@ export default async function ProjectHomePage({ params }: { params: Promise<{ id
             <ul style={{ fontSize: 13, color: 'var(--ink-dim)', paddingLeft: 18 }}>
               {dl.map((d) => (
                 <li key={d.id} style={{ marginTop: 6 }}>
-                  <strong style={{ color: 'var(--ink)' }}>{d.name}</strong> — {d.status}
+                  <Link href={`/projects/${id}/deliverables/${d.id}`} style={{ color: 'var(--ink)' }}>
+                    <strong>{d.name}</strong>
+                  </Link>
+                  {' — '}
+                  {d.status}
                   {d.due_date ? ` · due ${d.due_date}` : ''}
                 </li>
               ))}

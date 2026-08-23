@@ -175,6 +175,7 @@ async function seed() {
   const amId = (await pool.query('SELECT id FROM person WHERE email = $1', ['am@besbpo.example'])).rows[0].id;
   const leadId = (await pool.query('SELECT id FROM person WHERE email = $1', ['lead@besbpo.example'])).rows[0].id;
   const designId = (await pool.query('SELECT id FROM person WHERE email = $1', ['design@besbpo.example'])).rows[0].id;
+  const clientId = (await pool.query('SELECT id FROM person WHERE email = $1', ['client-a@nimbus.example'])).rows[0].id;
 
   if (!existingProjects.length) {
     const projectId = randomUUID();
@@ -228,7 +229,54 @@ async function seed() {
     await pool.query('INSERT INTO project_role (project_id, person_id, role) VALUES ($1,$2,$3)', [
       projectId, leadId, 'production_lead',
     ]);
-    console.log('phase-3 production data seeded');
+
+    // Phase 4: version → QA → client approval → handover chain
+    const v1 = randomUUID();
+    await pool.query(
+      `INSERT INTO version (id, org_id, deliverable_id, version, label, uri, notes, created_by, status)
+       VALUES ($1,$2,$3,1,'v1 — exploration','assets/logo-v1.png','first pass', $4, 'under_qa')`,
+      [v1, orgId, dId, designId],
+    );
+    const qa1 = randomUUID();
+    await pool.query(
+      "INSERT INTO qa_checklist (id, org_id, version_id, label, kind, passed, checked_by, checked_at) VALUES ($1,$2,$3,'comp spec','technical',true,$4,now())",
+      [qa1, orgId, v1, leadId],
+    );
+    const ap1 = randomUUID();
+    await pool.query(
+      `INSERT INTO approval (id, org_id, version_id, requested_by, decided_by, decided_at, decision, decision_note)
+       VALUES ($1,$2,$3,$4,$5,now(),'changes_requested','lighter mark please')`,
+      [ap1, orgId, v1, amId, clientId],
+    );
+    const v2 = randomUUID();
+    await pool.query(
+      `INSERT INTO version (id, org_id, deliverable_id, version, label, uri, notes, created_by, status)
+       VALUES ($1,$2,$3,2,'v2 — revised','assets/logo-v2.png','resolved feedback', $4, 'approved')`,
+      [v2, orgId, dId, designId],
+    );
+    await pool.query(
+      `INSERT INTO change_request (id, org_id, project_id, approval_id, title, scope_note, impact_hours, status, decided_by, decided_at, created_by)
+       VALUES ($1,$2,$3,$4,'Lighter mark revision', 'per approval feedback', 4, 'accepted', $5, now(), $6)`,
+      [randomUUID(), orgId, projectId, ap1, amId, amId],
+    );
+    const pkgQa = randomUUID();
+    await pool.query(
+      `INSERT INTO qa_checklist (id, org_id, version_id, label, kind, passed) VALUES ($1,$2,$3,'final comp','technical',true)`,
+      [pkgQa, orgId, v2],
+    );
+    const pkg = randomUUID();
+    await pool.query(
+      `INSERT INTO handover_package (id, org_id, project_id, title, status, created_by)
+       VALUES ($1,$2,$3,'Logo suite — delivery','ready', $4)`,
+      [pkg, orgId, projectId, leadId],
+    );
+    const item1 = randomUUID();
+    await pool.query(
+      `INSERT INTO handover_item (id, package_id, version_id, licence, source_included)
+       VALUES ($1,$2,$3,'CC BY', true)`,
+      [item1, pkg, v2],
+    );
+    console.log('phase-4 proofing + handover data seeded');
   }
 
   await pool.end();

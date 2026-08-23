@@ -116,6 +116,13 @@ export enum Capability {
   NotificationsRead = 'notifications.read',
   WorkloadRead = 'workload.read',
   TimeLog = 'time.log',
+  /* Phase 4: proofing, approvals, handover */
+  VersionsWrite = 'versions.write',
+  ApprovalsRequest = 'approvals.request',
+  ApprovalsDecide = 'approvals.decide',
+  QaWrite = 'qa.write',
+  ChangeWrite = 'change.write',
+  HandoverWrite = 'handover.write',
 }
 
 /** Which roles hold which capabilities (PDF section 1 role table). */
@@ -141,6 +148,11 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.NotificationsRead,
     Capability.WorkloadRead,
     Capability.TimeLog,
+    Capability.VersionsWrite,
+    Capability.ApprovalsRequest,
+    Capability.QaWrite,
+    Capability.ChangeWrite,
+    Capability.HandoverWrite,
   ],
   [Role.AccountManager]: [
     Capability.DirectoryRead,
@@ -159,6 +171,8 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.CommentsResolve,
     Capability.NotificationsRead,
     Capability.WorkloadRead,
+    Capability.ApprovalsRequest,
+    Capability.ChangeWrite,
   ],
   [Role.ProductionLead]: [
     Capability.DirectoryRead,
@@ -174,6 +188,9 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.NotificationsRead,
     Capability.WorkloadRead,
     Capability.TimeLog,
+    Capability.VersionsWrite,
+    Capability.QaWrite,
+    Capability.HandoverWrite,
   ],
   [Role.CreativeContributor]: [
     Capability.ProjectsRead,
@@ -182,6 +199,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.CommentsWrite,
     Capability.NotificationsRead,
     Capability.TimeLog,
+    Capability.VersionsWrite,
   ],
   [Role.QualityReviewer]: [
     Capability.ProjectsRead,
@@ -189,6 +207,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.CommentsWrite,
     Capability.CommentsResolve,
     Capability.NotificationsRead,
+    Capability.QaWrite,
   ],
   [Role.AgencyAdmin]: [
     Capability.DirectoryRead,
@@ -206,7 +225,13 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.CommentsWrite,
     Capability.NotificationsRead,
   ],
-  [Role.ClientApprover]: [Capability.ProjectsRead, Capability.CommentsWrite, Capability.NotificationsRead],
+  [Role.ClientApprover]: [
+    Capability.ProjectsRead,
+    Capability.DeliverablesRead,
+    Capability.CommentsWrite,
+    Capability.NotificationsRead,
+    Capability.ApprovalsDecide,
+  ],
   [Role.ThirdPartyVendor]: [Capability.ProjectsRead, Capability.NotificationsRead],
   [Role.FinanceUser]: [Capability.DirectoryRead, Capability.ProjectsRead, Capability.WorkloadRead],
 };
@@ -240,3 +265,39 @@ export enum ProjectStatus {
 }
 
 export const PROJECT_STATUSES: readonly ProjectStatus[] = Object.values(ProjectStatus);
+
+/* ------------------------------------------------------------------ */
+/* Phase 4: proofing, approvals, handover                              */
+/* ------------------------------------------------------------------ */
+
+/** Version lifecycle of a deliverable asset. */
+export enum VersionStatus {
+  Draft = 'draft',
+  UnderQa = 'under_qa',
+  InReview = 'in_review',
+  ChangesRequested = 'changes_requested',
+  Approved = 'approved',
+  HandoverReady = 'handover_ready',
+}
+
+/** Client/stakeholder decision on a version. */
+export enum ApprovalDecision {
+  Approved = 'approved',
+  ChangesRequested = 'changes_requested',
+}
+
+/** Change-request lifecycle (per change-control stage). */
+export enum ChangeRequestStatus {
+  Draft = 'draft',
+  Proposed = 'proposed',
+  Accepted = 'accepted',
+  Declined = 'declined',
+  Superseded = 'superseded',
+}
+
+/** Handover package lifecycle. */
+export enum HandoverStatus {
+  Assembling = 'assembling',
+  Ready = 'ready',
+  Delivered = 'delivered',
+}

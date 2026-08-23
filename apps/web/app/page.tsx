@@ -19,7 +19,7 @@ export default async function Home() {
       <main>
         <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500 }}>Palette Canvas Workspace</h1>
         <p style={{ color: 'var(--ink-dim)' }}>
-          Phase 3 — production workspace. Boards, dependencies, comments, notifications.
+          Phase 4 — proofing, approvals, handover. Versions, QA gates, client decisions.
         </p>
       </main>
     );
