@@ -1,0 +1,17 @@
+{
+  "name": "palette-canvas-workspace",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "prototypes/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "echo 'lint placeholder'"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
