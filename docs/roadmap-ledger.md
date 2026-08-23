@@ -21,7 +21,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P2-01 | Phase 2 intake + project setup | done | `bcd0a7e` | e2e 30 → permission tests pass | converted brief → project |
 | P3-01 | Phase 3 production workspace | done | `e99e99e` → PR #1 | e2e 41 → permission tests pass | board, drawer, notifications, workload |
 | P4-01 | Phase 4 proofing, approvals, handover | done | `eb9cec9` → PR #2 | e2e 55 → permission tests pass | QA gate, client decision, handover |
-| P5-01 | Backup + restore drill tooling | todo | — | script runs + table diff | next after PR #2 merges |
+| P5-01 | Backup + restore drill tooling | done | `85f5dfc` → PR TBD | backup exit 0; drill exit 0; 27-table diff equality; e2e 55 → permission tests pass | full-schema restore; build-order fix |
 | P5-02 | Load test script | todo | — | p95 < 1000 ms | pilot traffic profile |
 | P5-03 | Accessibility remediation | todo | — | audit + label sweep | inputs + landmarks |
 | P5-04 | Security remediation | todo | — | headers + error wrapper | manual audit |
@@ -50,6 +50,29 @@ who (or which agent) did it, and what remains. For scope definitions see
 | B-06 | Account health | todo | — | engagement dashboard | backlog |
 
 ## Recently completed detail
+
+### P5-01 — Backup + restore drill tooling (2026-08-23)
+
+- Branch: `p5-01-backup-restore-drill`, commit `85f5dfc` (PR TBD)
+- `scripts/backup.sh` — optional output-name argument so callers can predict
+  the dump path; default behaviour unchanged (`pg_dump` → `ops/backups/`)
+- `scripts/restore-drill.sh` — two fixes over the PR #3 scaffold:
+  1. the drill previously restored from `pre-drill-$TS.sql`, a file
+     `backup.sh` never wrote (it wrote `palette_canvas-$TS.sql`) — the drill
+     could never have passed; it now requests the backup under the exact name
+  2. the drill truncated only a hardcoded 19-table list but restored a full
+     `pg_dump` (28 tables), which would duplicate-key on the 9 unlisted
+     tables; it now drops and recreates the `public` schema and diffs every
+     application table (27, excluding `schema_migrations`)
+- Report committed: `ops/restore-drill/restore-drill-20260823T160606Z.md`
+  (27/27 tables round-tripped); raw dumps kept out of git via
+  `ops/backups/` in `.gitignore`
+- Also fixed: root `package.json` workspace order (`packages/*` before
+  `apps/*`) — a fresh clone could not pass `npm run build` because the API
+  compiled before `@palette-canvas/shared` emitted `dist/`
+- Gates: `npm run build` clean from a fresh install, e2e 55/55 against the
+  restored database, permission tests pass, `bash scripts/backup.sh` exit 0,
+  `bash scripts/restore-drill.sh` exit 0 with full table-diff equality
 
 ### P4-01 — Phase 4 proofing, approvals, handover (2026-08-21)
 
