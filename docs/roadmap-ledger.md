@@ -23,7 +23,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P4-01 | Phase 4 proofing, approvals, handover | done | `eb9cec9` → PR #2 | e2e 55 → permission tests pass | QA gate, client decision, handover |
 | P5-01 | Backup + restore drill tooling | done | PR #4 | backup exit 0; drill exit 0; 27-table diff equality; e2e 55 → permission tests pass | full-schema restore; build-order fix |
 | P5-02 | Load test script | done | PR #6 | 320/320 ok, p95 14 ms (< 1000 ms), exit 0; e2e 55 → permission tests pass | report committed; fails non-zero when API down |
-| P5-03 | Accessibility remediation | todo | — | audit + label sweep | inputs + landmarks |
+| P5-03 | Accessibility remediation | done | PR TBD | 26/26 controls named; banner+main+nav landmarks; build clean; e2e 55 → permission tests pass | audit in ops/accessibility/ |
 | P5-04 | Security remediation | todo | — | headers + error wrapper | manual audit |
 | P5-05 | Support runbooks (ops/) | todo | — | docs list covers 5 topics | — |
 | P5-06 | Import dry-run script | todo | — | schema validation + zero insert | — |
@@ -50,6 +50,20 @@ who (or which agent) did it, and what remains. For scope definitions see
 | B-06 | Account health | todo | — | engagement dashboard | backlog |
 
 ## Recently completed detail
+
+### P5-03 — Accessibility remediation (2026-08-23)
+
+- Branch: `p5-03-accessibility` (PR TBD)
+- Landmarks: root layout `<nav>` → `<header>` + `<nav aria-label="Primary">`
+  (banner was missing); board view switcher labelled `aria-label="Work view"`.
+- Form controls: audited all 26 — 17 already compliant via `<label>` wrappers
+  or P4-era `aria-label`s; 9 unlabeled (user switcher, per-card status,
+  checklist/time/comment inputs, QA-item/version inputs) now carry
+  `aria-label`s. Drawer close button also named.
+- Audit evidence: `ops/accessibility/accessibility-2026-08-23.md`.
+- Gates: `npm run build` clean, e2e 55/55, permission tests pass, `next build`
+  0 warnings. Colour-contrast / focus sweep deferred (needs a rendered-browser
+  tool) — noted in the report, non-blocking for pilot.
 
 ### P5-02 — Load test script (2026-08-23)
 
