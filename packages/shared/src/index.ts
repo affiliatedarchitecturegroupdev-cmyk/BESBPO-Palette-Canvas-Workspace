@@ -123,6 +123,15 @@ export enum Capability {
   QaWrite = 'qa.write',
   ChangeWrite = 'change.write',
   HandoverWrite = 'handover.write',
+  /* Phase 6 V1 */
+  CapacityRead = 'capacity.read',
+  CapacityWrite = 'capacity.write',
+  ReportsRead = 'reports.read',
+  IntegrationsRead = 'integrations.read',
+  IntegrationsWrite = 'integrations.write',
+  AnnotationsWrite = 'annotations.write',
+  IdentitySsoRead = 'identity.sso.read',
+  IdentitySsoManage = 'identity.sso.manage',
 }
 
 /** Which roles hold which capabilities (PDF section 1 role table). */
@@ -153,6 +162,14 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.QaWrite,
     Capability.ChangeWrite,
     Capability.HandoverWrite,
+    Capability.CapacityRead,
+    Capability.CapacityWrite,
+    Capability.ReportsRead,
+    Capability.IntegrationsRead,
+    Capability.IntegrationsWrite,
+    Capability.AnnotationsWrite,
+    Capability.IdentitySsoRead,
+    Capability.IdentitySsoManage,
   ],
   [Role.AccountManager]: [
     Capability.DirectoryRead,
@@ -173,6 +190,10 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.WorkloadRead,
     Capability.ApprovalsRequest,
     Capability.ChangeWrite,
+    Capability.CapacityRead,
+    Capability.ReportsRead,
+    Capability.IntegrationsRead,
+    Capability.AnnotationsWrite,
   ],
   [Role.ProductionLead]: [
     Capability.DirectoryRead,
@@ -191,6 +212,12 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.VersionsWrite,
     Capability.QaWrite,
     Capability.HandoverWrite,
+    Capability.CapacityRead,
+    Capability.CapacityWrite,
+    Capability.ReportsRead,
+    Capability.IntegrationsRead,
+    Capability.IntegrationsWrite,
+    Capability.AnnotationsWrite,
   ],
   [Role.CreativeContributor]: [
     Capability.ProjectsRead,
@@ -200,6 +227,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.NotificationsRead,
     Capability.TimeLog,
     Capability.VersionsWrite,
+    Capability.AnnotationsWrite,
   ],
   [Role.QualityReviewer]: [
     Capability.ProjectsRead,
@@ -208,6 +236,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.CommentsResolve,
     Capability.NotificationsRead,
     Capability.QaWrite,
+    Capability.AnnotationsWrite,
   ],
   [Role.AgencyAdmin]: [
     Capability.DirectoryRead,
@@ -233,7 +262,14 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.ApprovalsDecide,
   ],
   [Role.ThirdPartyVendor]: [Capability.ProjectsRead, Capability.NotificationsRead],
-  [Role.FinanceUser]: [Capability.DirectoryRead, Capability.ProjectsRead, Capability.WorkloadRead],
+  [Role.FinanceUser]: [
+    Capability.DirectoryRead,
+    Capability.ProjectsRead,
+    Capability.WorkloadRead,
+    Capability.CapacityRead,
+    Capability.ReportsRead,
+    Capability.IntegrationsRead,
+  ],
 };
 
 /** Union of capabilities across a user's roles. */

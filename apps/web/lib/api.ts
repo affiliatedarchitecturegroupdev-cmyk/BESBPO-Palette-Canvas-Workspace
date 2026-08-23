@@ -266,3 +266,107 @@ export interface TaskDetail {
 export async function taskDetail(email: string | null, id: string) {
   return api<TaskDetail>(`/tasks/${id}`, email);
 }
+
+/* ---- Phase 6 V1 ---- */
+
+export interface CapacityRow {
+  person_id: string;
+  name: string;
+  weekly_hours: number;
+  threshold_pct: number;
+  allocated_hours: number;
+  utilisation_pct: number;
+  over_threshold: boolean;
+  skills: { name: string; level: number }[];
+}
+
+export async function capacity(email: string | null) {
+  return api<CapacityRow[]>('/capacity', email);
+}
+
+export interface SkillCoverageRow {
+  skill: string;
+  holders: number;
+  avg_level: number;
+  demand_hours: number;
+}
+
+export async function skillCoverage(email: string | null) {
+  return api<SkillCoverageRow[]>('/capacity/skills', email);
+}
+
+export interface UtilisationRow {
+  person_id: string;
+  name: string;
+  logged_hours: number;
+  weekly_hours: number;
+  utilisation_pct: number;
+}
+
+export async function utilisation(email: string | null) {
+  return api<UtilisationRow[]>('/reports/utilisation', email);
+}
+
+export interface ProjectEffortRow {
+  project_id: string;
+  title: string;
+  status: string;
+  estimated_hours: number;
+  logged_hours: number;
+  variance_hours: number;
+}
+
+export async function projectEffort(email: string | null) {
+  return api<ProjectEffortRow[]>('/reports/effort', email);
+}
+
+export interface PortfolioRow {
+  status: string;
+  projects: number;
+  open_tasks: number;
+  estimated_hours: number;
+}
+
+export async function portfolio(email: string | null) {
+  return api<PortfolioRow[]>('/reports/portfolio', email);
+}
+
+export interface SlaRow {
+  project_id: string;
+  title: string;
+  task_id: string;
+  task_title: string;
+  sla_target: string;
+  due_date: string | null;
+  status: string;
+  breached: boolean;
+}
+
+export async function slaReport(email: string | null) {
+  return api<SlaRow[]>('/reports/sla', email);
+}
+
+export interface IntegrationRow {
+  id: string;
+  name: string;
+  target_url: string;
+  event: string;
+  active: boolean;
+  created_at: string;
+}
+
+export async function integrations(email: string | null) {
+  return api<IntegrationRow[]>('/integrations', email);
+}
+
+export interface SsoConfigRow {
+  id: string;
+  issuer: string;
+  client_id: string;
+  mfa_required: boolean;
+  created_at: string;
+}
+
+export async function ssoConfigs(email: string | null) {
+  return api<SsoConfigRow[]>('/identity/sso', email);
+}

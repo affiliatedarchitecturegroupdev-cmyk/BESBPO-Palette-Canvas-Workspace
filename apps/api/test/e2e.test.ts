@@ -31,6 +31,7 @@ interface ApiOptions {
   email?: string;
   method?: string;
   body?: unknown;
+  headers?: Record<string, string>;
 }
 
 async function api(base: string, path: string, opts: ApiOptions = {}) {
@@ -39,6 +40,7 @@ async function api(base: string, path: string, opts: ApiOptions = {}) {
     headers: {
       'content-type': 'application/json',
       ...(opts.email ? { 'x-user-email': opts.email } : {}),
+      ...(opts.headers ?? {}),
     },
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
@@ -62,7 +64,9 @@ async function main() {
       service_template, contact, brand, agency, role_binding, person, organisation,
       handover_item, handover_package, change_request, approval,
       notification, workstream, task, task_dependency, task_checklist, task_collaborator,
-      deliverable, comment, version, qa_checklist
+      deliverable, comment, version, qa_checklist,
+      skill, person_capacity, person_skill, integration, annotation,
+      sso_config, scim_identity
     CASCADE
   `);
 
@@ -539,6 +543,96 @@ async function main() {
     check('other org sees zero agencies', (crossTenant.json as unknown[]).length === 0);
     const crossProject = await api(base, `/projects/${project.id}`, { email: 'outsider@other.example' });
     check('cross-tenant project read returns nothing', (crossProject.json as unknown) === null);
+
+    /* ---- Phase 5/6 ---- */
+    console.log('e2e: security headers');
+    const sec = await fetch(`${base}/workload`, { headers: { 'x-user-email': 'lead@test.example' } });
+    check('x-content-type-options nosniff', sec.headers.get('x-content-type-options') === 'nosniff');
+    check('x-frame-options DENY', sec.headers.get('x-frame-options') === 'DENY');
+    check('content-security-policy present', !!sec.headers.get('content-security-policy'));
+
+    console.log('e2e: capacity planning (P6-01)');
+    const leadId = (await pool.query('SELECT id FROM person WHERE email = $1', ['lead@test.example'])).rows[0].id;
+    const capSet = await api(base, `/capacity/people/${leadId}`, {
+      email: 'lead@test.example', method: 'POST', body: { weeklyHours: 20, thresholdPct: 80 },
+    });
+    check('capacity profile upserted', capSet.status === 201);
+    const skill = await api(base, '/capacity/skills', {
+      email: 'lead@test.example', method: 'POST', body: { name: 'digital' },
+    });
+    check('skill created', skill.status === 201);
+    const skillId = (skill.json as { id: string }).id;
+    const assign = await api(base, `/capacity/people/${leadId}/skills`, {
+      email: 'lead@test.example', method: 'POST', body: { skillId, level: 4 },
+    });
+    check('skill assigned', assign.status === 201);
+    const capList = await api(base, '/capacity', { email: 'lead@test.example' });
+    const leadCap = (capList.json as Array<{ person_id: string; over_threshold: boolean; skills: unknown[] }>)
+      .find((r) => r.person_id === leadId);
+    check('capacity list includes person with skill', !!leadCap && leadCap.skills.length === 1);
+    const coverage = await api(base, '/capacity/skills', { email: 'lead@test.example' });
+    check('skill coverage reports holder', (coverage.json as Array<{ holders: number }>)[0].holders === 1);
+    const capForbidden = await api(base, '/capacity', { email: 'client@test.example' });
+    check('client cannot read capacity (403)', capForbidden.status === 403);
+
+    console.log('e2e: reports (P6-02/P6-03)');
+    const util = await api(base, '/reports/utilisation', { email: 'lead@test.example' });
+    check('utilisation returns rows', Array.isArray(util.json));
+    const effort = await api(base, '/reports/effort', { email: 'lead@test.example' });
+    check('effort-by-project returns rows', Array.isArray(effort.json));
+    const portfolio = await api(base, '/reports/portfolio', { email: 'lead@test.example' });
+    check('portfolio roll-up returns rows', Array.isArray(portfolio.json));
+    const sla = await api(base, '/reports/sla', { email: 'lead@test.example' });
+    check('sla report returns rows', Array.isArray(sla.json));
+    const reportsForbidden = await api(base, '/reports/portfolio', { email: 'client@test.example' });
+    check('client cannot read reports (403)', reportsForbidden.status === 403);
+
+    console.log('e2e: integrations (P6-04)');
+    const integ = await api(base, '/integrations', {
+      email: 'lead@test.example', method: 'POST',
+      body: { name: 'hook', targetUrl: 'https://example.test/hook', event: 'approval.decided' },
+    });
+    check('integration created', integ.status === 201);
+    const integList = await api(base, '/integrations', { email: 'lead@test.example' });
+    check('integration listed', (integList.json as unknown[]).length === 1);
+    const integForbidden = await api(base, '/integrations', { email: 'client@test.example' });
+    check('client cannot read integrations (403)', integForbidden.status === 403);
+
+    console.log('e2e: richer proofing (P6-05)');
+    const ann = await api(base, `/proofing/versions/${v2Id}/annotations`, {
+      email: 'lead@test.example', method: 'POST', body: { x: 0.5, y: 0.5, body: 'nudge logo left' },
+    });
+    check('annotation created', ann.status === 201);
+    const annId = (ann.json as { id: string }).id;
+    const annList = await api(base, `/proofing/versions/${v2Id}/annotations`, { email: 'lead@test.example' });
+    check('annotations listed', (annList.json as unknown[]).length === 1);
+    const annResolve = await api(base, `/proofing/versions/${v2Id}/annotations/${annId}`, {
+      email: 'lead@test.example', method: 'PATCH', body: { resolved: true },
+    });
+    check('annotation resolved', (annResolve.json as { resolved: boolean }).resolved === true);
+    const compare = await api(base, `/proofing/deliverables/${dlId}/compare?a=${v1Id}&b=${v2Id}`, { email: 'lead@test.example' });
+    const cmp = compare.json as { a: { qa_total: number }; b: { qa_total: number; open_annotations: number } };
+    check('version compare returns both sides', cmp.a.qa_total >= 0 && cmp.b.qa_total >= 0);
+    const annForbidden = await api(base, `/proofing/versions/${v2Id}/annotations`, {
+      email: 'client@test.example', method: 'POST', body: { body: 'x' },
+    });
+    check('client cannot annotate (403)', annForbidden.status === 403);
+
+    console.log('e2e: SSO/SCIM (P6-06)');
+    const sso = await api(base, '/identity/sso', {
+      email: 'ops@test.example', method: 'POST', body: { issuer: 'https://idp.example', clientId: 'abc', mfaRequired: true },
+    });
+    check('sso config upserted', sso.status === 201);
+    // set a SCIM token directly, then provision a user with it
+    await pool.query('UPDATE sso_config SET scim_token = $1 WHERE org_id = $2', ['tok-123', orgId]);
+    const scim = await api(base, '/identity/sso/scim/users', {
+      email: 'ops@test.example', method: 'POST',
+      body: { externalId: 'ext-1', email: 'scimuser@test.example', name: 'Scim User', active: true },
+      headers: { authorization: 'Bearer tok-123' } as never,
+    });
+    check('scim user provisioned with token', scim.status === 201);
+    const ssoForbidden = await api(base, '/identity/sso', { email: 'lead@test.example' });
+    check('production lead cannot read sso config (403)', ssoForbidden.status === 403);
   } finally {
     await app.close();
     await pool.end();

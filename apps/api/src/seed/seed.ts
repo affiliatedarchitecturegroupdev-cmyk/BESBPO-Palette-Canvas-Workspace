@@ -279,6 +279,67 @@ async function seed() {
     console.log('phase-4 proofing + handover data seeded');
   }
 
+  // ---- Phase 5/6: capacity profiles, skills, an integration, an annotation
+  {
+    const designId = (await pool.query('SELECT id FROM person WHERE email = $1', ['design@besbpo.example'])).rows[0].id;
+    const qaId = (await pool.query('SELECT id FROM person WHERE email = $1', ['qa@besbpo.example'])).rows[0].id;
+    const leadId = (await pool.query('SELECT id FROM person WHERE email = $1', ['lead@besbpo.example'])).rows[0].id;
+
+    const skills = ['print', 'digital', 'motion', 'brand'];
+    const skillIds: Record<string, string> = {};
+    for (const s of skills) {
+      const existing = await pool.query('SELECT id FROM skill WHERE org_id = $1 AND name = $2', [orgId, s]);
+      if (existing.rows.length) {
+        skillIds[s] = existing.rows[0].id;
+      } else {
+        const id = randomUUID();
+        await pool.query('INSERT INTO skill (id, org_id, name) VALUES ($1,$2,$3)', [id, orgId, s]);
+        skillIds[s] = id;
+      }
+    }
+
+    const capacities: Array<[string, number, number]> = [
+      [designId, 40, 85],
+      [qaId, 30, 80],
+      [leadId, 35, 90],
+    ];
+    for (const [pid, hours, threshold] of capacities) {
+      await pool.query(
+        `INSERT INTO person_capacity (id, org_id, person_id, weekly_hours, threshold_pct)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (org_id, person_id) DO UPDATE SET weekly_hours = EXCLUDED.weekly_hours, threshold_pct = EXCLUDED.threshold_pct`,
+        [randomUUID(), orgId, pid, hours, threshold],
+      );
+    }
+
+    const personSkills: Array<[string, string, number]> = [
+      [designId, 'digital', 5],
+      [designId, 'brand', 4],
+      [designId, 'print', 3],
+      [qaId, 'digital', 3],
+      [qaId, 'brand', 2],
+      [leadId, 'brand', 4],
+    ];
+    for (const [pid, skill, level] of personSkills) {
+      await pool.query(
+        `INSERT INTO person_skill (id, org_id, person_id, skill_id, level)
+         VALUES ($1,$2,$3,$4,$5)
+         ON CONFLICT (person_id, skill_id) DO UPDATE SET level = EXCLUDED.level`,
+        [randomUUID(), orgId, pid, skillIds[skill], level],
+      );
+    }
+
+    const integ = await pool.query('SELECT id FROM integration WHERE org_id = $1 AND name = $2', [orgId, 'pilot-slack']);
+    if (!integ.rows.length) {
+      await pool.query(
+        `INSERT INTO integration (id, org_id, name, target_url, event, active, created_by)
+         VALUES ($1,$2,'pilot-slack','https://hooks.example.test/pilot','approval.decided',false,$3)`,
+        [randomUUID(), orgId, leadId],
+      );
+    }
+    console.log('phase-6 capacity + integration seed data added');
+  }
+
   await pool.end();
   console.log('seed complete');
 }
