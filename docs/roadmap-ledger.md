@@ -24,16 +24,16 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P5-01 | Backup + restore drill tooling | done | PR #4 | backup exit 0; drill exit 0; 27-table diff equality; e2e 55 → permission tests pass | full-schema restore; build-order fix |
 | P5-02 | Load test script | done | PR #6 | 320/320 ok, p95 14 ms (< 1000 ms), exit 0; e2e 55 → permission tests pass | report committed; fails non-zero when API down |
 | P5-03 | Accessibility remediation | done | PR #8 | 26/26 controls named; banner+main+nav landmarks; build clean; e2e 55 → permission tests pass | audit in ops/accessibility/ |
-| P5-04 | Security remediation | done | branch `phase5-6-ten-steps` | headers on every response (nosniff/DENY/CSP); 5xx returns uniform JSON, no stack; e2e 80 → permission tests pass | Nest `SecurityModule` (APP_FILTER + middleware) |
-| P5-05 | Support runbooks (ops/) | done | branch `phase5-6-ten-steps` | `ops/runbooks/` covers 5 topics (start, backup/restore, onboarding, perf, security) | — |
-| P5-06 | Import dry-run script | done | branch `phase5-6-ten-steps` | `scripts/import-dry-run.sh` validates shape, exits 0/1, zero writes | — |
-| P5-07 | Pilot launch checklist | done | branch `phase5-6-ten-steps` | `ops/pilot-launch-checklist.md` 12-item readiness list | — |
-| P6-01 | Capacity planning | done | branch `phase5-6-ten-steps` | capacity profiles + skills + coverage API; `/capacity` page; e2e 80 → permission tests pass | V1 |
-| P6-02 | Time/effort reporting | done | branch `phase5-6-ten-steps` | utilisation + effort-by-project APIs; `/reports` page; e2e 80 → permission tests pass | V1 |
-| P6-03 | Advanced dashboards | done | branch `phase5-6-ten-steps` | portfolio roll-up + SLA report APIs; `/reports` page; e2e 80 → permission tests pass | V1 |
-| P6-04 | Integrations hub | done | branch `phase5-6-ten-steps` | webhook CRUD + fire-and-forget emit on approval events; `/integrations` page; e2e 80 → permission tests pass | V1; retries/DLQ deferred to P6-11 |
-| P6-05 | Richer proofing | done | branch `phase5-6-ten-steps` | annotations + resolve + version compare APIs; e2e 80 → permission tests pass | V1 |
-| P6-06 | SSO/SCIM | done | branch `phase5-6-ten-steps` | SSO config CRUD + SCIM user provisioning (token-gated); `/settings/sso` page; e2e 80 → permission tests pass | V1; OIDC dance deferred |
+| P5-04 | Security remediation | done | PR #10 | headers on every response (nosniff/DENY/CSP); 5xx returns uniform JSON, no stack; e2e 80 → permission tests pass | Nest `SecurityModule` (APP_FILTER + middleware) |
+| P5-05 | Support runbooks (ops/) | done | PR #10 | `ops/runbooks/` covers 5 topics (start, backup/restore, onboarding, perf, security) | — |
+| P5-06 | Import dry-run script | done | PR #10 | `scripts/import-dry-run.sh` validates shape, exits 0/1, zero writes | — |
+| P5-07 | Pilot launch checklist | done | PR #10 | `ops/pilot-launch-checklist.md` 12-item readiness list | — |
+| P6-01 | Capacity planning | done | PR #10 | capacity profiles + skills + coverage API; `/capacity` page; e2e 80 → permission tests pass | V1 |
+| P6-02 | Time/effort reporting | done | PR #10 | utilisation + effort-by-project APIs; `/reports` page; e2e 80 → permission tests pass | V1 |
+| P6-03 | Advanced dashboards | done | PR #10 | portfolio roll-up + SLA report APIs; `/reports` page; e2e 80 → permission tests pass | V1 |
+| P6-04 | Integrations hub | done | PR #10 | webhook CRUD + fire-and-forget emit on approval events; `/integrations` page; e2e 80 → permission tests pass | V1; retries/DLQ deferred to P6-11 |
+| P6-05 | Richer proofing | done | PR #10 | annotations + resolve + version compare APIs; e2e 80 → permission tests pass | V1 |
+| P6-06 | SSO/SCIM | done | PR #10 | SSO config CRUD + SCIM user provisioning (token-gated); `/settings/sso` page; e2e 80 → permission tests pass | V1; OIDC dance deferred |
 | P6-07 | Commercial controls | todo | — | rate cards + PO + invoice | V1 |
 | P6-08 | Automation builder | todo | — | rules DSL | V1 |
 | P6-09 | Live updates (SSE) | todo | — | authenticated channel | infra |
