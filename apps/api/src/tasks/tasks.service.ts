@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { randomUUID } from 'crypto';
 import { Database } from '../db/database';
 import { NotificationsService } from '../notifications/notifications.service';
+import { EventsService } from '../events/events.service';
 
 export interface TaskRow {
   id: string;
@@ -59,6 +60,7 @@ export class TasksService {
   constructor(
     private readonly db: Database,
     private readonly notifications: NotificationsService,
+    private readonly events: EventsService,
   ) {}
 
   async board(orgId: string, projectId: string): Promise<TaskRow[]> {
@@ -201,6 +203,9 @@ export class TasksService {
       );
     }
     if (input.status && input.status !== current.status) {
+      this.events.publish(orgId, 'task.status_changed', {
+        taskId: id, from: current.status, to: row.status, assigneeId: row.assignee_id,
+      });
       // Notify assignee + creator about movement (communication rule: visible flow).
       const targets = new Set(
         [current.assignee_id, current.created_by].filter((x): x is string => !!x),

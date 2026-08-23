@@ -370,3 +370,89 @@ export interface SsoConfigRow {
 export async function ssoConfigs(email: string | null) {
   return api<SsoConfigRow[]>('/identity/sso', email);
 }
+
+/* ---- Phase 6 ops ---- */
+
+export interface BudgetRow {
+  project_id: string;
+  name: string;
+  po_number: string | null;
+  budget_amount: number | null;
+  approved_hours: number;
+  approved_amount: number;
+  logged_hours: number;
+  logged_value: number;
+  blended_rate: number;
+}
+
+export async function budgetVsEffort(email: string | null, projectId: string) {
+  return api<BudgetRow>(`/commercial/projects/${projectId}/budget`, email);
+}
+
+export interface InvoiceReadyRow {
+  id: string;
+  name: string;
+  status: string;
+  invoice_amount: string | null;
+  target_date: string | null;
+  project_id: string;
+  project_name: string;
+  po_number: string | null;
+}
+
+export async function invoiceReady(email: string | null) {
+  return api<InvoiceReadyRow[]>('/commercial/invoice-ready', email);
+}
+
+export interface RateCardRow {
+  id: string;
+  name: string;
+  currency: string;
+  active: boolean;
+  entries: { role: string; skill: string | null; hourly_rate: string }[];
+}
+
+export async function rateCards(email: string | null) {
+  return api<RateCardRow[]>('/commercial/rate-cards', email);
+}
+
+export interface AuditEventRow {
+  id: string;
+  actor: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  metadata: Record<string, unknown>;
+  at: string;
+}
+
+export async function auditSearch(email: string | null, params: Record<string, string>) {
+  const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+  return api<AuditEventRow[]>(`/audit${qs ? `?${qs}` : ''}`, email);
+}
+
+export interface AutomationRuleRow {
+  id: string;
+  name: string;
+  trigger_event: string;
+  condition: unknown[];
+  action: { type: string; message?: string };
+  active: boolean;
+}
+
+export async function automations(email: string | null) {
+  return api<AutomationRuleRow[]>('/automations', email);
+}
+
+export interface AssetRow {
+  id: string;
+  key: string;
+  content_type: string;
+  size_bytes: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export async function assets(email: string | null) {
+  return api<AssetRow[]>('/assets', email);
+}

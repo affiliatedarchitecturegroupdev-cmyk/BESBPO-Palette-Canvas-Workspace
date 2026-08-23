@@ -66,7 +66,10 @@ async function main() {
       notification, workstream, task, task_dependency, task_checklist, task_collaborator,
       deliverable, comment, version, qa_checklist,
       skill, person_capacity, person_skill, integration, annotation,
-      sso_config, scim_identity
+      sso_config, scim_identity,
+      rate_card, rate_card_entry, estimate, estimate_line,
+      asset, job, automation_rule, automation_run, ai_action,
+      legal_hold, permission_review, role_capability_override
     CASCADE
   `);
 
@@ -633,6 +636,256 @@ async function main() {
     check('scim user provisioned with token', scim.status === 201);
     const ssoForbidden = await api(base, '/identity/sso', { email: 'lead@test.example' });
     check('production lead cannot read sso config (403)', ssoForbidden.status === 403);
+
+    console.log('e2e: commercial controls (P6-07)');
+    const card = await api(base, '/commercial/rate-cards', {
+      email: 'ops@test.example', method: 'POST',
+      body: { name: 'Std', currency: 'USD', entries: [{ role: 'production_lead', hourlyRate: 140 }] },
+    });
+    check('rate card created', card.status === 201);
+    const cardForbidden = await api(base, '/commercial/rate-cards', {
+      email: 'client@test.example', method: 'POST', body: { name: 'x', entries: [] },
+    });
+    check('client cannot create rate card (403)', cardForbidden.status === 403);
+    const est1 = await api(base, `/commercial/projects/${project.id}/estimates`, {
+      email: 'ops@test.example', method: 'POST',
+      body: { notes: 'v1', lines: [{ label: 'Design', role: 'production_lead', hours: 12, hourlyRate: 140 }] },
+    });
+    check('estimate v1 created', est1.status === 201 && (est1.json as { version: number }).version === 1);
+    const est2 = await api(base, `/commercial/projects/${project.id}/estimates`, {
+      email: 'ops@test.example', method: 'POST',
+      body: { lines: [{ label: 'Design', role: 'production_lead', hours: 12, hourlyRate: 140 }] },
+    });
+    check('estimate v2 supersedes', est2.status === 201 && (est2.json as { version: number }).version === 2);
+    const est2Id = (est2.json as { id: string }).id;
+    const approve = await api(base, `/commercial/estimates/${est2Id}/status`, {
+      email: 'am@test.example', method: 'POST', body: { status: 'approved' },
+    });
+    check('estimate approved', approve.status === 201 && (approve.json as { status: string }).status === 'approved');
+    const budgetBefore = await api(base, `/commercial/projects/${project.id}/budget`, { email: 'ops@test.example' });
+    const hoursBefore = (budgetBefore.json as { logged_hours: number }).logged_hours;
+    const timeLog = await api(base, `/workload/tasks/${t1Id}/time`, {
+      email: 'lead@test.example', method: 'POST', body: { hours: 2, note: 'research' },
+    });
+    check('time logged against task', timeLog.status === 201);
+    const budget = await api(base, `/commercial/projects/${project.id}/budget`, { email: 'ops@test.example' });
+    const b = budget.json as { approved_amount: number; logged_hours: number; logged_value: number; blended_rate: number };
+    check('budget vs effort math', budget.status === 200 && b.approved_amount === 1680 &&
+      b.logged_hours === hoursBefore + 2 && b.logged_value === b.logged_hours * b.blended_rate);
+    const po = await api(base, `/commercial/projects/${project.id}`, {
+      email: 'am@test.example', method: 'PATCH', body: { poNumber: 'PO-1', budgetAmount: 5000 },
+    });
+    check('PO set on project', po.status === 200 && (po.json as { po_number: string }).po_number === 'PO-1');
+    const milestoneId = (milestone.json as { id: string }).id;
+    const invFlag = await api(base, `/commercial/milestones/${milestoneId}/invoice-ready`, {
+      email: 'am@test.example', method: 'POST', body: { ready: true, amount: 2500 },
+    });
+    check('milestone flagged invoice-ready', invFlag.status === 201);
+    const inv = await api(base, '/commercial/invoice-ready', { email: 'ops@test.example' });
+    check('invoice-ready listing returns milestone', inv.status === 200 && (inv.json as unknown[]).length === 1);
+
+    console.log('e2e: object storage + media workers (P6-10/P6-12)');
+    // 1x1 transparent PNG
+    const pngB64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const uploadForbidden = await api(base, '/assets', {
+      email: 'client@test.example', method: 'POST', body: { key: 'x.png', contentType: 'image/png', dataBase64: pngB64 },
+    });
+    check('client cannot upload asset (403)', uploadForbidden.status === 403);
+    const upload = await api(base, '/assets', {
+      email: 'lead@test.example', method: 'POST', body: { key: 'logo.png', contentType: 'image/png', dataBase64: pngB64 },
+    });
+    check('asset uploaded', upload.status === 201);
+    const assetId = (upload.json as { id: string }).id;
+    const signed = await api(base, `/assets/${assetId}/url`, { email: 'lead@test.example' });
+    const signedUrl = (signed.json as { url: string }).url;
+    check('signed url issued', signed.status === 200 && signedUrl.includes('sig='));
+    const download = await fetch(`${base}${signedUrl}`);
+    const downloaded = Buffer.from(await download.arrayBuffer()).toString('base64');
+    check('signed url round-trips bytes', download.status === 200 && downloaded === pngB64);
+    const tampered = await fetch(`${base}${signedUrl.replace(/sig=.+$/, 'sig=deadbeef')}`);
+    check('tampered signature rejected (403)', tampered.status === 403);
+    // media pipeline: upload enqueued media.inspect — drain and verify dimensions
+    await api(base, '/jobs/process', { email: 'ops@test.example', method: 'POST', body: {} });
+    const inspected = await api(base, '/assets', { email: 'lead@test.example' });
+    const meta = (inspected.json as Array<{ id: string; metadata: { media?: { width: number; height: number } } }>)
+      .find((a) => a.id === assetId)?.metadata?.media;
+    check('media.inspect recorded dimensions', meta?.width === 1 && meta?.height === 1);
+    await api(base, '/jobs/process', { email: 'ops@test.example', method: 'POST', body: {} });
+    const thumbJob = await pool.query(
+      `SELECT status FROM job WHERE org_id = $1 AND queue = 'media.thumbnail' ORDER BY created_at DESC LIMIT 1`, [orgId]);
+    const afterThumb = await api(base, '/assets', { email: 'lead@test.example' });
+    const renditions = (afterThumb.json as Array<{ id: string; metadata: { renditions?: Array<{ kind: string }> } }>)
+      .find((a) => a.id === assetId)?.metadata?.renditions;
+    check('media.thumbnail completed with rendition', thumbJob.rows[0]?.status === 'done' &&
+      !!renditions?.some((r) => r.kind === 'thumbnail'));
+
+    console.log('e2e: worker queue + DLQ (P6-11)');
+    // idempotent enqueue
+    const j1 = await api(base, '/jobs', {
+      email: 'ops@test.example', method: 'POST',
+      body: { queue: 'webhook.deliver', payload: { targetUrl: 'http://127.0.0.1:1/hook', body: {} }, idempotencyKey: 'k1', maxAttempts: 2 },
+    });
+    const j2 = await api(base, '/jobs', {
+      email: 'ops@test.example', method: 'POST',
+      body: { queue: 'webhook.deliver', payload: { targetUrl: 'http://127.0.0.1:1/hook', body: {} }, idempotencyKey: 'k1', maxAttempts: 2 },
+    });
+    check('idempotent enqueue returns same job', j1.status === 201 && (j1.json as { id: string }).id === (j2.json as { id: string }).id);
+    const jobId = (j1.json as { id: string }).id;
+    // unreachable target: attempt 1 fails (backs off), fast-forward, attempt 2 → dead
+    await api(base, '/jobs/process', { email: 'ops@test.example', method: 'POST', body: {} });
+    await pool.query('UPDATE job SET run_at = now() WHERE id = $1', [jobId]);
+    await api(base, '/jobs/process', { email: 'ops@test.example', method: 'POST', body: {} });
+    const deadJob = await pool.query('SELECT status, attempts, last_error FROM job WHERE id = $1', [jobId]);
+    check('failing job lands in DLQ after retries', deadJob.rows[0]?.status === 'dead' && deadJob.rows[0]?.attempts === 2);
+    const dlq = await api(base, '/jobs/dlq', { email: 'ops@test.example' });
+    check('DLQ listing contains job', (dlq.json as Array<{ id: string }>).some((j) => j.id === jobId));
+    const retry = await api(base, `/jobs/${jobId}/retry`, { email: 'ops@test.example', method: 'POST' });
+    check('DLQ retry requeues job', retry.status === 201 && (retry.json as { status: string }).status === 'pending');
+    const jobsForbidden = await api(base, '/jobs', { email: 'client@test.example' });
+    check('client cannot read jobs (403)', jobsForbidden.status === 403);
+
+    console.log('e2e: automation builder (P6-08)');
+    const rule = await api(base, '/automations', {
+      email: 'ops@test.example', method: 'POST',
+      body: {
+        name: 'notify-on-progress', triggerEvent: 'task.status_changed',
+        condition: [{ field: 'to', op: 'eq', value: 'in_progress' }],
+        action: { type: 'notify', message: 'Task {taskId} started', recipientRole: 'production_lead' },
+      },
+    });
+    check('automation rule created', rule.status === 201);
+    const ruleForbidden = await api(base, '/automations', {
+      email: 'client@test.example', method: 'POST',
+      body: { name: 'x', triggerEvent: 'task.status_changed', action: { type: 'notify', message: 'x' } },
+    });
+    check('client cannot create automation (403)', ruleForbidden.status === 403);
+    // non-matching event first: move t2 to done was already done earlier; move t1 to in_progress matches
+    const move = await api(base, `/tasks/${t1Id}`, { email: 'lead@test.example', method: 'PATCH', body: { status: 'in_progress' } });
+    check('task moved to in_progress', move.status === 200);
+    const runs = await api(base, '/automations/runs', { email: 'ops@test.example' });
+    const runRows = runs.json as Array<{ matched: boolean; detail: { recipients?: number } }>;
+    check('automation ran with matched condition', runRows.length >= 1 &&
+      runRows.some((r) => r.matched && (r.detail?.recipients ?? 0) >= 1));
+    const autoInbox = await api(base, '/notifications', { email: 'lead@test.example' });
+    check('automation notification delivered', (autoInbox.json as { items: Array<{ message: string }> }).items
+      .some((n) => n.message.includes('started')));
+
+    console.log('e2e: live updates over SSE (P6-09)');
+    const sseAnon = await fetch(`${base}/events/stream`);
+    check('anonymous event stream rejected (401)', sseAnon.status === 401);
+    const sseController = new AbortController();
+    const sseRes = await fetch(`${base}/events/stream`, {
+      headers: { 'x-user-email': 'lead@test.example' }, signal: sseController.signal,
+    });
+    check('event stream opens', sseRes.status === 200);
+    await api(base, `/tasks/${t1Id}`, { email: 'lead@test.example', method: 'PATCH', body: { status: 'in_review' } });
+    const reader = (sseRes.body as unknown as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
+    let sseBuf = '';
+    const sseDeadline = Date.now() + 5000;
+    while (Date.now() < sseDeadline && !sseBuf.includes('task.status_changed')) {
+      const race = await Promise.race([
+        reader.read(),
+        new Promise<null>((r) => setTimeout(() => r(null), 500)),
+      ]);
+      if (race?.value) sseBuf += decoder.decode(race.value);
+    }
+    sseController.abort();
+    check('sse receives task.status_changed', sseBuf.includes('task.status_changed'));
+
+    console.log('e2e: ai opt-in guards (P6-13)');
+    const aiBlocked = await api(base, '/ai/actions', {
+      email: 'ops@test.example', method: 'POST',
+      body: { kind: 'webhook.create', payload: { name: 'ai-hook', targetUrl: 'https://example.test/ai', event: 'approval.decided' } },
+    });
+    check('ai proposal blocked while opted out (403)', aiBlocked.status === 403);
+    const optIn = await api(base, '/ai/opt-in', { email: 'ops@test.example', method: 'PATCH', body: { enabled: true } });
+    check('ai opt-in enabled', optIn.status === 200 && (optIn.json as { enabled: boolean }).enabled === true);
+    const aiProposal = await api(base, '/ai/actions', {
+      email: 'ops@test.example', method: 'POST',
+      body: { kind: 'webhook.create', payload: { name: 'ai-hook', targetUrl: 'https://example.test/ai', event: 'approval.decided' } },
+    });
+    check('ai action proposed (not executed)', aiProposal.status === 201 && (aiProposal.json as { status: string }).status === 'pending');
+    const aiActionId = (aiProposal.json as { id: string }).id;
+    const integBefore = await api(base, '/integrations', { email: 'lead@test.example' });
+    check('no webhook created before human approval', (integBefore.json as Array<{ name: string }>).every((i) => i.name !== 'ai-hook'));
+    const aiDecideForbidden = await api(base, `/ai/actions/${aiActionId}/decide`, {
+      email: 'lead@test.example', method: 'POST', body: { approve: true },
+    });
+    check('production lead cannot decide ai action (403)', aiDecideForbidden.status === 403);
+    const aiDecide = await api(base, `/ai/actions/${aiActionId}/decide`, {
+      email: 'ops@test.example', method: 'POST', body: { approve: true },
+    });
+    check('ai action approved + executed', aiDecide.status === 201 && (aiDecide.json as { status: string }).status === 'executed');
+    const integAfter = await api(base, '/integrations', { email: 'lead@test.example' });
+    check('webhook created after human approval', (integAfter.json as Array<{ name: string }>).some((i) => i.name === 'ai-hook'));
+
+    console.log('e2e: legal holds + retention (P6-14)');
+    const hold = await api(base, '/legal/holds', {
+      email: 'ops@test.example', method: 'POST',
+      body: { scopeType: 'organisation', scopeId: orgId, reason: 'litigation' },
+    });
+    check('legal hold set', hold.status === 201);
+    const holdId = (hold.json as { id: string }).id;
+    const purgeBlocked = await api(base, '/legal/purge', { email: 'ops@test.example', method: 'POST' });
+    check('purge blocked by legal hold (409)', purgeBlocked.status === 409);
+    const release = await api(base, `/legal/holds/${holdId}/release`, { email: 'ops@test.example', method: 'POST' });
+    check('legal hold released', release.status === 201);
+    const retention = await api(base, '/legal/retention', { email: 'ops@test.example', method: 'POST', body: { days: 365 } });
+    check('retention policy set', retention.status === 201 && (retention.json as { days: number }).days === 365);
+    const purge = await api(base, '/legal/purge', { email: 'ops@test.example', method: 'POST' });
+    check('purge runs after release', purge.status === 201);
+    const legalForbidden = await api(base, '/legal/holds', { email: 'lead@test.example' });
+    check('production lead cannot manage holds (403)', legalForbidden.status === 403);
+
+    console.log('e2e: audit explorer (B-01)');
+    const auditByAction = await api(base, '/audit?action=estimate.approved', { email: 'ops@test.example' });
+    const auditRows = auditByAction.json as Array<{ action: string }>;
+    check('audit search by action', auditRows.length >= 1 && auditRows.every((r) => r.action === 'estimate.approved'));
+    const auditByText = await api(base, '/audit?q=legal_hold', { email: 'ops@test.example' });
+    check('audit free-text search', (auditByText.json as Array<{ action: string }>).some((r) => r.action.includes('legal_hold')));
+    const auditForbidden = await api(base, '/audit', { email: 'client@test.example' });
+    check('client cannot read audit (403)', auditForbidden.status === 403);
+
+    console.log('e2e: permissions reviews (B-02)');
+    const agencyUploadBefore = await api(base, '/assets', {
+      email: 'agency-a@test.example', method: 'POST', body: { key: 'a.png', contentType: 'image/png', dataBase64: pngB64 },
+    });
+    check('agency admin lacks assets.write by default (403)', agencyUploadBefore.status === 403);
+    const review = await api(base, '/permissions/reviews', {
+      email: 'lead@test.example', method: 'POST',
+      body: { role: 'agency_admin', capability: 'assets.write', effect: 'grant', rationale: 'pilot agency needs uploads' },
+    });
+    check('permission review proposed', review.status === 201);
+    const reviewId = (review.json as { id: string }).id;
+    // separation of duties: proposer (am) cannot decide their own review
+    const ownReview = await api(base, '/permissions/reviews', {
+      email: 'am@test.example', method: 'POST',
+      body: { role: 'agency_admin', capability: 'assets.read', effect: 'revoke', rationale: 'sod probe' },
+    });
+    const ownReviewId = (ownReview.json as { id: string }).id;
+    const selfDecide = await api(base, `/permissions/reviews/${ownReviewId}/decide`, {
+      email: 'am@test.example', method: 'POST', body: { approve: true },
+    });
+    check('proposer cannot decide own review (404)', selfDecide.status === 404);
+    const decide = await api(base, `/permissions/reviews/${reviewId}/decide`, {
+      email: 'am@test.example', method: 'POST', body: { approve: true },
+    });
+    check('review approved by second person', decide.status === 201 && (decide.json as { status: string }).status === 'approved');
+    const agencyUploadAfter = await api(base, '/assets', {
+      email: 'agency-a@test.example', method: 'POST', body: { key: 'a.png', contentType: 'image/png', dataBase64: pngB64 },
+    });
+    check('approved grant takes effect (201)', agencyUploadAfter.status === 201);
+    const revoke = await api(base, '/permissions/reviews', {
+      email: 'lead@test.example', method: 'POST',
+      body: { role: 'agency_admin', capability: 'assets.write', effect: 'revoke', rationale: 'pilot ended' },
+    });
+    const revokeId = (revoke.json as { id: string }).id;
+    await api(base, `/permissions/reviews/${revokeId}/decide`, { email: 'am@test.example', method: 'POST', body: { approve: true } });
+    const agencyUploadRevoked = await api(base, '/assets', {
+      email: 'agency-a@test.example', method: 'POST', body: { key: 'b.png', contentType: 'image/png', dataBase64: pngB64 },
+    });
+    check('approved revoke takes effect (403)', agencyUploadRevoked.status === 403);
   } finally {
     await app.close();
     await pool.end();

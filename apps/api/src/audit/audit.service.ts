@@ -44,4 +44,33 @@ export class AuditService {
     );
     return rows;
   }
+
+  /** B-01 audit explorer: filter by action/actor/target/date range/free text. */
+  async search(orgId: string, filters: AuditFilters): Promise<AuditRow[]> {
+    const clauses = ['org_id = $1'];
+    const params: unknown[] = [orgId];
+    if (filters.action) { params.push(filters.action); clauses.push(`action = $${params.length}`); }
+    if (filters.actor) { params.push(filters.actor); clauses.push(`actor = $${params.length}`); }
+    if (filters.targetType) { params.push(filters.targetType); clauses.push(`target_type = $${params.length}`); }
+    if (filters.from) { params.push(filters.from); clauses.push(`at >= $${params.length}`); }
+    if (filters.to) { params.push(filters.to); clauses.push(`at <= $${params.length}`); }
+    if (filters.q) {
+      params.push(`%${filters.q}%`);
+      clauses.push(`(target_id ILIKE $${params.length} OR metadata::text ILIKE $${params.length} OR action ILIKE $${params.length})`);
+    }
+    const { rows } = await this.db.query<AuditRow>(
+      `SELECT * FROM audit_event WHERE ${clauses.join(' AND ')} ORDER BY at DESC LIMIT 500`,
+      params,
+    );
+    return rows;
+  }
+}
+
+export interface AuditFilters {
+  action?: string;
+  actor?: string;
+  targetType?: string;
+  from?: string;
+  to?: string;
+  q?: string;
 }

@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { createHmac, randomUUID } from 'crypto';
 import { Database } from '../db/database';
+import { JobsService } from '../jobs/jobs.service';
 
 export interface IntegrationRow {
   id: string;
@@ -12,13 +13,29 @@ export interface IntegrationRow {
 }
 
 /**
- * P6-04 integrations hub: outbound webhook subscriptions. Delivery is
- * best-effort (fire-and-forget with HMAC-SHA256 signature); a durable worker
- * queue with retries + DLQ is P6-11.
+ * P6-04 integrations hub: outbound webhook subscriptions. Deliveries are
+ * enqueued as `webhook.deliver` jobs on the P6-11 worker queue — HMAC-signed
+ * POST with retries + DLQ and idempotency keys, replacing the earlier
+ * fire-and-forget fetch.
  */
 @Injectable()
-export class IntegrationsService {
-  constructor(private readonly db: Database) {}
+export class IntegrationsService implements OnModuleInit {
+  constructor(
+    private readonly db: Database,
+    private readonly jobs: JobsService,
+  ) {}
+
+  onModuleInit() {
+    this.jobs.registerHandler('webhook.deliver', async (payload) => {
+      const body = JSON.stringify(payload.body);
+      const headers: Record<string, string> = { 'content-type': 'application/json' };
+      if (payload.secret) {
+        headers['x-palette-signature'] = createHmac('sha256', String(payload.secret)).update(body).digest('hex');
+      }
+      const res = await fetch(String(payload.targetUrl), { method: 'POST', headers, body });
+      if (!res.ok) throw new Error(`webhook delivery failed: HTTP ${res.status}`);
+    });
+  }
 
   async list(orgId: string): Promise<IntegrationRow[]> {
     const { rows } = await this.db.query<IntegrationRow>(
@@ -44,23 +61,23 @@ export class IntegrationsService {
     );
   }
 
-  /** Emit an event to all active subscriptions; returns delivery attempts. */
+  /** Emit an event to all active subscriptions; returns deliveries enqueued. */
   async emit(orgId: string, event: string, payload: Record<string, unknown>): Promise<number> {
-    const { rows } = await this.db.query<{ target_url: string; secret: string | null }>(
-      'SELECT target_url, secret FROM integration WHERE org_id = $1 AND event = $2 AND active = true',
+    const { rows } = await this.db.query<{ id: string; target_url: string; secret: string | null }>(
+      'SELECT id, target_url, secret FROM integration WHERE org_id = $1 AND event = $2 AND active = true',
       [orgId, event],
     );
-    const body = JSON.stringify({ event, payload, emitted_at: new Date().toISOString() });
-    let attempted = 0;
+    const body = { event, payload, emitted_at: new Date().toISOString() };
+    let enqueued = 0;
     for (const sub of rows) {
-      attempted++;
-      const headers: Record<string, string> = { 'content-type': 'application/json' };
-      if (sub.secret) {
-        headers['x-palette-signature'] = createHmac('sha256', sub.secret).update(body).digest('hex');
-      }
-      // fire-and-forget; failures are swallowed (queue/retries land in P6-11)
-      fetch(sub.target_url, { method: 'POST', headers, body }).catch(() => undefined);
+      await this.jobs.enqueue(
+        orgId,
+        'webhook.deliver',
+        { targetUrl: sub.target_url, secret: sub.secret, body },
+        { idempotencyKey: `${sub.id}:${body.emitted_at}`, maxAttempts: 3 },
+      );
+      enqueued++;
     }
-    return attempted;
+    return enqueued;
   }
 }

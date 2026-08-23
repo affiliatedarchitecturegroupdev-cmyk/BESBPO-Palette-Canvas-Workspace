@@ -340,6 +340,56 @@ async function seed() {
     console.log('phase-6 capacity + integration seed data added');
   }
 
+  // ---- Phase 6 ops: rate card, estimate, PO, automation rule, asset, holds
+  {
+    const opsId = (await pool.query('SELECT id FROM person WHERE email = $1', ['ops@besbpo.example'])).rows[0].id;
+    const leadId = (await pool.query('SELECT id FROM person WHERE email = $1', ['lead@besbpo.example'])).rows[0].id;
+    const projectId = (await pool.query('SELECT id FROM project WHERE org_id = $1 AND name = $2', [orgId, 'Nimbus rebrand'])).rows[0]?.id;
+
+    const card = await pool.query('SELECT id FROM rate_card WHERE org_id = $1 AND name = $2', [orgId, 'Standard 2026']);
+    if (!card.rows.length) {
+      const cardId = randomUUID();
+      await pool.query(
+        `INSERT INTO rate_card (id, org_id, name, currency, created_by) VALUES ($1,$2,'Standard 2026','USD',$3)`,
+        [cardId, orgId, opsId],
+      );
+      const entries: Array<[string, number]> = [['production_lead', 140], ['creative_contributor', 110], ['quality_reviewer', 95]];
+      for (const [role, rate] of entries) {
+        await pool.query(
+          `INSERT INTO rate_card_entry (id, org_id, rate_card_id, role, hourly_rate) VALUES ($1,$2,$3,$4,$5)`,
+          [randomUUID(), orgId, cardId, role, rate],
+        );
+      }
+      if (projectId) {
+        const estId = randomUUID();
+        await pool.query(
+          `INSERT INTO estimate (id, org_id, project_id, version, status, notes, total_hours, total_amount, created_by)
+           VALUES ($1,$2,$3,1,'approved','Initial pilot scope',120,14000,$4)`,
+          [estId, orgId, projectId, opsId],
+        );
+        await pool.query(
+          `INSERT INTO estimate_line (id, org_id, estimate_id, label, role, hours, hourly_rate, amount)
+           VALUES ($1,$2,$3,'Design & QA','creative_contributor',120,116.67,14000)`,
+          [randomUUID(), orgId, estId],
+        );
+        await pool.query(
+          `UPDATE project SET po_number = 'PO-2026-0042', budget_amount = 20000 WHERE id = $1`,
+          [projectId],
+        );
+      }
+    }
+
+    const rule = await pool.query('SELECT id FROM automation_rule WHERE org_id = $1 AND name = $2', [orgId, 'notify-lead-on-approval']);
+    if (!rule.rows.length) {
+      await pool.query(
+        `INSERT INTO automation_rule (id, org_id, name, trigger_event, condition, action, active, created_by)
+         VALUES ($1,$2,'notify-lead-on-approval','approval.decided','[]',$3,true,$4)`,
+        [randomUUID(), orgId, JSON.stringify({ type: 'notify', message: 'Approval {decision} on version {versionId}', recipientRole: 'production_lead' }), leadId],
+      );
+    }
+    console.log('phase-6 ops seed data added');
+  }
+
   await pool.end();
   console.log('seed complete');
 }

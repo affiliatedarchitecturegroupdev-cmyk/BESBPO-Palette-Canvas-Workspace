@@ -41,6 +41,23 @@ import { IntegrationsService } from './integrations/integrations.service';
 import { SsoController } from './sso/sso.controller';
 import { SsoService } from './sso/sso.service';
 import { SecurityModule } from './security/security.module';
+import { EventsService } from './events/events.service';
+import { EventsController } from './events/events.controller';
+import { JobsService } from './jobs/jobs.service';
+import { JobsController } from './jobs/jobs.controller';
+import { StorageService } from './storage/storage.service';
+import { StorageController } from './storage/storage.controller';
+import { MediaService } from './media/media.service';
+import { CommercialService } from './commercial/commercial.service';
+import { CommercialController } from './commercial/commercial.controller';
+import { AutomationsService } from './automations/automations.service';
+import { AutomationsController } from './automations/automations.controller';
+import { AiService } from './ai/ai.service';
+import { AiController } from './ai/ai.controller';
+import { LegalService } from './legal/legal.service';
+import { LegalController } from './legal/legal.controller';
+import { PermissionsReviewsService } from './permissions/reviews.service';
+import { PermissionsReviewsController } from './permissions/reviews.controller';
 
 @Module({
   imports: [SecurityModule],
@@ -63,6 +80,14 @@ import { SecurityModule } from './security/security.module';
     ReportsController,
     IntegrationsController,
     SsoController,
+    EventsController,
+    JobsController,
+    StorageController,
+    CommercialController,
+    AutomationsController,
+    AiController,
+    LegalController,
+    PermissionsReviewsController,
   ],
   providers: [
     Database,
@@ -88,6 +113,15 @@ import { SecurityModule } from './security/security.module';
     ReportsService,
     IntegrationsService,
     SsoService,
+    EventsService,
+    JobsService,
+    StorageService,
+    MediaService,
+    CommercialService,
+    AutomationsService,
+    AiService,
+    LegalService,
+    PermissionsReviewsService,
   ],
 })
 export class AppModule {}

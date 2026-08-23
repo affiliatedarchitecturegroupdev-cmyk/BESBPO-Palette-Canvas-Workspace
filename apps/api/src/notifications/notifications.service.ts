@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Database } from '../db/database';
+import { EventsService } from '../events/events.service';
 
 export interface NotificationRow {
   id: string;
@@ -20,7 +21,10 @@ export interface NotificationRow {
  */
 @Injectable()
 export class NotificationsService {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly events: EventsService,
+  ) {}
 
   async emit(
     orgId: string,
@@ -31,10 +35,14 @@ export class NotificationsService {
     message: string,
   ): Promise<void> {
     if (!recipientId) return;
+    const id = randomUUID();
     await this.db.query(
       'INSERT INTO notification (id, org_id, recipient_id, kind, target_type, target_id, message) VALUES ($1,$2,$3,$4,$5,$6,$7)',
-      [randomUUID(), orgId, recipientId, kind, targetType, targetId, message],
+      [id, orgId, recipientId, kind, targetType, targetId, message],
     );
+    this.events.publish(orgId, 'notification.created', {
+      notificationId: id, recipient_id: recipientId, kind, message,
+    });
   }
 
   async inbox(orgId: string, recipientId: string): Promise<NotificationRow[]> {
