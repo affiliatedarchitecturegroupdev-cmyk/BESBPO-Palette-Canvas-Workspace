@@ -2,8 +2,8 @@
   "name": "palette-canvas-workspace",
   "private": true,
   "workspaces": [
-    "apps/*",
     "packages/*",
+    "apps/*",
     "prototypes/*"
   ],
   "scripts": {

@@ -5,8 +5,9 @@ set -e
 : "${DATABASE_URL:=postgres://palette_canvas:devpassword@localhost:5432/palette_canvas}"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 OUT_DIR="${1:-$(dirname "$0")/../ops/backups}"
+NAME="${2:-palette_canvas-$TS}"
 mkdir -p "$OUT_DIR"
-OUT="$OUT_DIR/palette_canvas-$TS.sql"
+OUT="$OUT_DIR/$NAME.sql"
 echo "backing up $DATABASE_URL → $OUT"
 PGPASSWORD='' pg_dump "$DATABASE_URL" > "$OUT"
 bytes=$(wc -c < "$OUT")

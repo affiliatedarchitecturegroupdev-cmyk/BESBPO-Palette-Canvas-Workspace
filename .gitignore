@@ -5,3 +5,4 @@ dist/
 .seed-dist/
 *.log
 *.tsbuildinfo
+ops/backups/
