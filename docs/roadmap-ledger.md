@@ -22,7 +22,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P3-01 | Phase 3 production workspace | done | `e99e99e` → PR #1 | e2e 41 → permission tests pass | board, drawer, notifications, workload |
 | P4-01 | Phase 4 proofing, approvals, handover | done | `eb9cec9` → PR #2 | e2e 55 → permission tests pass | QA gate, client decision, handover |
 | P5-01 | Backup + restore drill tooling | done | PR #4 | backup exit 0; drill exit 0; 27-table diff equality; e2e 55 → permission tests pass | full-schema restore; build-order fix |
-| P5-02 | Load test script | done | PR TBD | 320/320 ok, p95 14 ms (< 1000 ms), exit 0; e2e 55 → permission tests pass | report committed; fails non-zero when API down |
+| P5-02 | Load test script | done | PR #6 | 320/320 ok, p95 14 ms (< 1000 ms), exit 0; e2e 55 → permission tests pass | report committed; fails non-zero when API down |
 | P5-03 | Accessibility remediation | todo | — | audit + label sweep | inputs + landmarks |
 | P5-04 | Security remediation | todo | — | headers + error wrapper | manual audit |
 | P5-05 | Support runbooks (ops/) | todo | — | docs list covers 5 topics | — |
@@ -53,7 +53,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 
 ### P5-02 — Load test script (2026-08-23)
 
-- Branch: `p5-02-load-test` (PR TBD)
+- Branch: `p5-02-load-test`, merged via PR #6
 - `scripts/load-test.js` fixes over the PR #3 scaffold:
   1. the scaffold hit `/workload` as `design@besbpo.example`, but the
      capability matrix gates `workload.read` to ops/finance/lead — every
