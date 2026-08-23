@@ -2,6 +2,11 @@
 
 Monorepo for the Palette Canvas production workspace (see `Instructions.txt` and `docs/`).
 
+**Navigating this repo**:
+- `docs/gap-analysis.md` — current state vs PDF V1, per module
+- `docs/roadmap.md` — ordered production roadmap with exit criteria
+- `docs/roadmap-ledger.md` — every step executed + status (pick-up point for any agent)
+
 ## Phase 4 — proofing, approvals, handover (current)
 
 Real-persistence implementation of the planning-document Phase 4: versioned

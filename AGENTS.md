@@ -58,3 +58,8 @@ Prefer small, well-specified slices: "Add board permission tests for vendor and 
 - e2e test `apps/api/test/e2e.test.ts` truncates all domain tables first —
   safe to run repeatedly.
 - Run gates: `npm run build` then `npm run test` at the workspace root.
+- **Pick up work**: read `docs/roadmap-ledger.md` first — take the top `todo`
+  entry, execute it, record the commit + gates in the ledger, and update
+  `docs/roadmap.md` only if scope actually changed.
+- **No phase skipping**: roadmap steps execute in order; blocked entries stay
+  `blocked` with a note rather than disappearing.
