@@ -36,10 +36,45 @@ export interface SlaRow {
   breached: boolean;
 }
 
+export interface AccountHealthRow {
+  agency_id: string;
+  agency_name: string;
+  projects: number;
+  tasks_total: number;
+  tasks_completed: number;
+  open_approvals: number;
+  avg_decision_hours: number | null;
+  last_activity: string | null;
+}
+
 /** P6-02 time/effort reporting + P6-03 portfolio/WIP/SLA dashboards. */
 @Injectable()
 export class ReportsService {
   constructor(private readonly db: Database) {}
+
+  /** B-06 account health: engagement roll-up per agency. */
+  async accountHealth(orgId: string): Promise<AccountHealthRow[]> {
+    const { rows } = await this.db.query<AccountHealthRow>(
+      `SELECT a.id AS agency_id, a.name AS agency_name,
+              COUNT(DISTINCT p.id)::int AS projects,
+              COUNT(DISTINCT t.id)::int AS tasks_total,
+              COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'done')::int AS tasks_completed,
+              COUNT(DISTINCT ap.id) FILTER (WHERE ap.decision IS NULL)::int AS open_approvals,
+              ROUND(AVG(EXTRACT(EPOCH FROM (ap.decided_at - ap.requested_at)) / 3600)
+                FILTER (WHERE ap.decided_at IS NOT NULL)::numeric, 1) AS avg_decision_hours,
+              GREATEST(MAX(p.updated_at), MAX(t.updated_at), MAX(ap.decided_at)) AS last_activity
+       FROM agency a
+       LEFT JOIN project p ON p.agency_id = a.id
+       LEFT JOIN task t ON t.project_id = p.id
+       LEFT JOIN deliverable d ON d.project_id = p.id
+       LEFT JOIN version v ON v.deliverable_id = d.id
+       LEFT JOIN approval ap ON ap.version_id = v.id
+       WHERE a.org_id = $1
+       GROUP BY a.id, a.name ORDER BY a.name`,
+      [orgId],
+    );
+    return rows;
+  }
 
   /** P6-02: logged effort vs weekly capacity per person (utilisation). */
   async utilisation(orgId: string): Promise<UtilisationRow[]> {

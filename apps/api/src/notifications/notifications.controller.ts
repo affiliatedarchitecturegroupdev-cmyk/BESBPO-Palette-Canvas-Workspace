@@ -24,6 +24,20 @@ export class NotificationsController {
     return { items, unread };
   }
 
+  /** P7-03 scheduled reminders: queue a notification for later delivery. */
+  @Post('reminders')
+  async scheduleReminder(
+    @Headers('x-user-email') email: string | undefined,
+    @Body() body: { message: string; delayMinutes?: number; recipientId?: string },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.NotificationsRead);
+    const job = await this.notifications.scheduleReminder(
+      ctx.orgId, body.recipientId ?? ctx.userId, body.message, body.delayMinutes ?? 0,
+    );
+    return { jobId: job.id, runAt: job.run_at };
+  }
+
   @Post('mark-read')
   async markRead(
     @Headers('x-user-email') email: string | undefined,

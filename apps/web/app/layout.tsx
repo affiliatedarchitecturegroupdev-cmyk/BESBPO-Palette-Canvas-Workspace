@@ -20,6 +20,8 @@ const links = [
   { href: '/integrations', label: 'Integrations' },
   { href: '/commercial', label: 'Commercial' },
   { href: '/audit', label: 'Audit' },
+  { href: '/account-health', label: 'Accounts' },
+  { href: '/library', label: 'Library' },
   { href: '/settings/sso', label: 'SSO' },
   { href: '/notifications', label: 'Inbox' },
 ];

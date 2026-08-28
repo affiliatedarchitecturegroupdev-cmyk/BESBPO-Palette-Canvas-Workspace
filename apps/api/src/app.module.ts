@@ -1,7 +1,11 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { Database } from './db/database';
 import { IdentityService } from './identity/identity.service';
 import { IdentityController } from './identity/identity.controller';
+import { ApiKeysService } from './identity/api-keys.service';
+import { ApiKeysController } from './identity/api-keys.controller';
+import { ApiKeyMiddleware } from './identity/api-key.middleware';
+import { MfaController } from './identity/mfa.controller';
 import { AuthzService } from './identity/authz.service';
 import { AuditController } from './audit/audit.controller';
 import { AuditService } from './audit/audit.service';
@@ -58,6 +62,7 @@ import { LegalService } from './legal/legal.service';
 import { LegalController } from './legal/legal.controller';
 import { PermissionsReviewsService } from './permissions/reviews.service';
 import { PermissionsReviewsController } from './permissions/reviews.controller';
+import { EsignController } from './proofing/esign.controller';
 
 @Module({
   imports: [SecurityModule],
@@ -88,10 +93,14 @@ import { PermissionsReviewsController } from './permissions/reviews.controller';
     AiController,
     LegalController,
     PermissionsReviewsController,
+    ApiKeysController,
+    MfaController,
+    EsignController,
   ],
   providers: [
     Database,
     IdentityService,
+    ApiKeysService,
     AuthzService,
     AuditService,
     PermissionService,
@@ -124,4 +133,9 @@ import { PermissionsReviewsController } from './permissions/reviews.controller';
     PermissionsReviewsService,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /** x-api-key → session mapping + x-agent-tag capture (P7-04, B-03). */
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(ApiKeyMiddleware).forRoutes('*');
+  }
+}

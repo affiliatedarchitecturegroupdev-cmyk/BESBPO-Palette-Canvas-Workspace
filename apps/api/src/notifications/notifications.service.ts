@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Database } from '../db/database';
 import { EventsService } from '../events/events.service';
+import { JobsService } from '../jobs/jobs.service';
 
 export interface NotificationRow {
   id: string;
@@ -20,11 +21,30 @@ export interface NotificationRow {
  * scoped by capability `notifications.read` in the controller.
  */
 @Injectable()
-export class NotificationsService {
+export class NotificationsService implements OnModuleInit {
   constructor(
     private readonly db: Database,
     private readonly events: EventsService,
+    private readonly jobs: JobsService,
   ) {}
+
+  /** P7-03: reminder jobs land on the P6-11 queue and emit on due. */
+  onModuleInit() {
+    this.jobs.registerHandler('notification.reminder', async (payload) => {
+      const p = payload as { orgId: string; recipientId: string; message: string };
+      await this.emit(p.orgId, p.recipientId, 'reminder', 'reminder', '', p.message);
+    });
+  }
+
+  /** Schedule a reminder notification; delayMinutes 0 sends on the next drain. */
+  async scheduleReminder(orgId: string, recipientId: string, message: string, delayMinutes = 0) {
+    return this.jobs.enqueue(
+      orgId,
+      'notification.reminder',
+      { orgId, recipientId, message },
+      { delayMs: delayMinutes * 60_000 },
+    );
+  }
 
   async emit(
     orgId: string,

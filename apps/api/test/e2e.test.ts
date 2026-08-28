@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { AppModule } from '../src/app.module';
 import { migrate } from '../src/db/migrate';
 import { DATABASE_URL, migrationsDir } from '../src/db/paths';
+import { totp } from '../src/identity/totp';
 
 /**
  * End-to-end flow test against a real Postgres instance:
@@ -69,7 +70,8 @@ async function main() {
       sso_config, scim_identity,
       rate_card, rate_card_entry, estimate, estimate_line,
       asset, job, automation_rule, automation_run, ai_action,
-      legal_hold, permission_review, role_capability_override
+      legal_hold, permission_review, role_capability_override,
+      api_key, esign_envelope
     CASCADE
   `);
 
@@ -886,6 +888,129 @@ async function main() {
       email: 'agency-a@test.example', method: 'POST', body: { key: 'b.png', contentType: 'image/png', dataBase64: pngB64 },
     });
     check('approved revoke takes effect (403)', agencyUploadRevoked.status === 403);
+
+    console.log('e2e: agent-attribution audit (B-03)');
+    const agentWrite = await api(base, `/tasks/${t1Id}`, {
+      email: 'lead@test.example', method: 'PATCH', body: { status: 'in_progress' },
+      headers: { 'x-agent-tag': 'openhands-e2e' },
+    });
+    check('agent-tagged write accepted', agentWrite.status === 200);
+    const tagged = await api(base, '/audit?agent=openhands-e2e', { email: 'ops@test.example' });
+    const taggedRows = tagged.json as Array<{ agent_tag: string | null }>;
+    check('audit rows carry agent_tag', taggedRows.length >= 1 &&
+      taggedRows.every((r) => r.agent_tag === 'openhands-e2e'));
+    const allAudit = await api(base, '/audit', { email: 'ops@test.example' });
+    check('untagged writes have null agent_tag',
+      (allAudit.json as Array<{ agent_tag: string | null }>).some((r) => r.agent_tag === null));
+
+    console.log('e2e: MFA TOTP (P7-01)');
+    const enroll = await api(base, '/identity/mfa/enroll', { email: 'lead@test.example', method: 'POST' });
+    const mfaSecret = (enroll.json as { secret: string }).secret;
+    check('mfa enroll returns secret', enroll.status === 201 && typeof mfaSecret === 'string' && mfaSecret.length >= 16);
+    const badActivate = await api(base, '/identity/mfa/activate', {
+      email: 'lead@test.example', method: 'POST', body: { code: '000000' },
+    });
+    check('wrong TOTP rejected (401)', badActivate.status === 401);
+    const activate = await api(base, '/identity/mfa/activate', {
+      email: 'lead@test.example', method: 'POST', body: { code: totp(mfaSecret) },
+    });
+    check('mfa activated with valid TOTP', activate.status === 201 && (activate.json as { enabled: boolean }).enabled);
+    const mfaStatus = await api(base, '/identity/mfa/status', { email: 'lead@test.example' });
+    check('mfa status enabled', (mfaStatus.json as { enabled: boolean }).enabled === true);
+    const verify = await api(base, '/identity/mfa/verify', {
+      email: 'lead@test.example', method: 'POST', body: { code: totp(mfaSecret) },
+    });
+    check('mfa verify ok', verify.status === 201 && (verify.json as { valid: boolean }).valid);
+
+    console.log('e2e: OIDC login flow (P7-02)');
+    const ssoCfgs = await api(base, '/identity/sso', { email: 'ops@test.example' });
+    const cfgId = (ssoCfgs.json as Array<{ id: string }>)[0].id;
+    const authz = await api(base, `/identity/sso/${cfgId}/authorize`, { email: 'ops@test.example' });
+    const state = (authz.json as { state: string }).state;
+    check('authorize url carries signed state', authz.status === 200 &&
+      (authz.json as { url: string }).url.includes('/authorize?') && state.includes('.'));
+    const badState = state.slice(0, -2) + (state.endsWith('aa') ? 'bb' : 'aa');
+    const tamperedState = await api(base, '/identity/sso/token', {
+      method: 'POST', body: { configId: cfgId, state: badState, code: 'stub:lead@test.example' },
+    });
+    check('tampered state rejected (401)', tamperedState.status === 401);
+    const exchange = await api(base, '/identity/sso/token', {
+      method: 'POST', body: { configId: cfgId, state, code: 'stub:lead@test.example' },
+    });
+    check('code exchange resolves person', exchange.status === 201 &&
+      (exchange.json as { email: string }).email === 'lead@test.example');
+    const unprovisioned = await api(base, '/identity/sso/token', {
+      method: 'POST', body: { configId: cfgId, state, code: 'stub:ghost@test.example' },
+    });
+    check('unprovisioned person rejected (401)', unprovisioned.status === 401);
+
+    console.log('e2e: scheduled reminders (P7-03)');
+    const reminder = await api(base, '/notifications/reminders', {
+      email: 'lead@test.example', method: 'POST', body: { message: 'check the board', delayMinutes: 0 },
+    });
+    check('reminder scheduled', reminder.status === 201 && typeof (reminder.json as { jobId: string }).jobId === 'string');
+    await api(base, '/jobs/process', { email: 'ops@test.example', method: 'POST', body: {} });
+    const inboxAfterReminder = await api(base, '/notifications', { email: 'lead@test.example' });
+    check('reminder delivered', (inboxAfterReminder.json as { items: Array<{ kind: string; message: string }> }).items
+      .some((n) => n.kind === 'reminder' && n.message === 'check the board'));
+
+    console.log('e2e: API keys (P7-04)');
+    const keyCreate = await api(base, '/identity/api-keys', {
+      email: 'ops@test.example', method: 'POST', body: { name: 'ci-bot' },
+    });
+    const apiToken = (keyCreate.json as { token: string }).token;
+    check('api key created with token shown once', keyCreate.status === 201 && apiToken.startsWith('pck_'));
+    const keyList = await api(base, '/identity/api-keys', { email: 'ops@test.example' });
+    const keyRows = keyList.json as Array<{ id: string; hash?: string }>;
+    check('api key listed without hash', keyList.status === 200 && keyRows.length >= 1 &&
+      keyRows.every((k) => k.hash === undefined));
+    const viaKey = await fetch(`${base}/notifications`, { headers: { 'x-api-key': apiToken } });
+    check('x-api-key authenticates (200)', viaKey.status === 200);
+    const keyId = keyRows[0].id;
+    const revokeKey = await api(base, `/identity/api-keys/${keyId}`, { email: 'ops@test.example', method: 'DELETE' });
+    check('api key revoked', revokeKey.status === 200 && (revokeKey.json as { revoked_at: string | null }).revoked_at !== null);
+    const viaRevoked = await fetch(`${base}/notifications`, { headers: { 'x-api-key': apiToken } });
+    check('revoked key rejected (401)', viaRevoked.status === 401);
+    const keyForbidden = await api(base, '/identity/api-keys', { email: 'lead@test.example', method: 'POST', body: { name: 'x' } });
+    check('lead cannot manage api keys (403)', keyForbidden.status === 403);
+
+    console.log('e2e: e-sign stub (P7-05)');
+    const envelope = await api(base, `/proofing/approvals/${approvalId}/esign`, {
+      email: 'am@test.example', method: 'POST',
+    });
+    const envelopeId = (envelope.json as { id: string }).id;
+    check('esign envelope sent', envelope.status === 201 && (envelope.json as { status: string }).status === 'sent');
+    const latest = await api(base, `/proofing/approvals/${approvalId}/esign`, { email: 'am@test.example' });
+    check('envelope retrievable', latest.status === 200 && (latest.json as { id: string }).id === envelopeId);
+    const completed = await api(base, `/proofing/esign/${envelopeId}/complete`, {
+      email: 'client@test.example', method: 'POST',
+    });
+    check('envelope completed by signer role', completed.status === 201 && (completed.json as { status: string }).status === 'completed');
+    const completeForbidden = await api(base, `/proofing/esign/${envelopeId}/complete`, {
+      email: 'lead@test.example', method: 'POST',
+    });
+    check('lead cannot complete envelope (403)', completeForbidden.status === 403);
+
+    console.log('e2e: integration health (P7-06)');
+    // trigger an approval decision so webhook.deliver jobs are enqueued per integration
+    const approval2 = await api(base, `/proofing/approvals/${v2Id}`, { email: 'am@test.example', method: 'POST', body: {} });
+    const approval2Id = (approval2.json as { id: string }).id;
+    await api(base, `/proofing/approvals/${approval2Id}/decide`, {
+      email: 'client@test.example', method: 'POST', body: { decision: 'approved' },
+    });
+    await api(base, '/jobs/process', { email: 'ops@test.example', method: 'POST', body: {} });
+    const health = await api(base, '/integrations/health', { email: 'ops@test.example' });
+    const healthRows = health.json as Array<{ name: string; deliveries: number; last_status: string | null }>;
+    check('integration health aggregates deliveries', health.status === 200 && healthRows.length >= 1 &&
+      healthRows.some((r) => r.deliveries >= 1 && r.last_status !== null));
+
+    console.log('e2e: account health (B-06)');
+    const acctHealth = await api(base, '/reports/account-health', { email: 'ops@test.example' });
+    const acctRows = acctHealth.json as Array<{ agency_name: string; projects: number; tasks_completed: number }>;
+    check('account health roll-up', acctHealth.status === 200 && acctRows.length >= 1 &&
+      acctRows.some((r) => r.projects >= 1));
+    const acctForbidden = await api(base, '/reports/account-health', { email: 'client@test.example' });
+    check('client cannot read account health (403)', acctForbidden.status === 403);
   } finally {
     await app.close();
     await pool.end();

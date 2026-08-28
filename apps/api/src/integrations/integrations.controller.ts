@@ -19,6 +19,14 @@ export class IntegrationsController {
     return this.integrations.list(ctx.orgId);
   }
 
+  /** P7-06 integration health: delivery counts + last status per integration. */
+  @Get('health')
+  async health(@Headers('x-user-email') email: string | undefined) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.IntegrationsRead);
+    return this.integrations.health(ctx.orgId);
+  }
+
   @Post()
   async create(
     @Headers('x-user-email') email: string | undefined,

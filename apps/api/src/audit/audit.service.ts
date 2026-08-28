@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { Database } from '../db/database';
+import { currentAgentTag } from './agent-context';
 
 export interface AuditRow {
   id: string;
@@ -11,6 +12,7 @@ export interface AuditRow {
   target_id: string;
   metadata: Record<string, unknown>;
   at: string;
+  agent_tag: string | null;
 }
 
 /**
@@ -31,9 +33,9 @@ export class AuditService {
     metadata: Record<string, unknown> = {},
   ): Promise<AuditRow> {
     return this.db.one<AuditRow>(
-      `INSERT INTO audit_event (id, org_id, actor, action, target_type, target_id, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [randomUUID(), orgId, actor, action, targetType, targetId, JSON.stringify(metadata)],
+      `INSERT INTO audit_event (id, org_id, actor, action, target_type, target_id, metadata, agent_tag)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [randomUUID(), orgId, actor, action, targetType, targetId, JSON.stringify(metadata), currentAgentTag()],
     );
   }
 
@@ -51,6 +53,7 @@ export class AuditService {
     const params: unknown[] = [orgId];
     if (filters.action) { params.push(filters.action); clauses.push(`action = $${params.length}`); }
     if (filters.actor) { params.push(filters.actor); clauses.push(`actor = $${params.length}`); }
+    if (filters.agent) { params.push(filters.agent); clauses.push(`agent_tag = $${params.length}`); }
     if (filters.targetType) { params.push(filters.targetType); clauses.push(`target_type = $${params.length}`); }
     if (filters.from) { params.push(filters.from); clauses.push(`at >= $${params.length}`); }
     if (filters.to) { params.push(filters.to); clauses.push(`at <= $${params.length}`); }
@@ -69,6 +72,7 @@ export class AuditService {
 export interface AuditFilters {
   action?: string;
   actor?: string;
+  agent?: string;
   targetType?: string;
   from?: string;
   to?: string;
