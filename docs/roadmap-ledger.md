@@ -42,12 +42,18 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P6-12 | Media workers | done | PR #12 | media.inspect records PNG/JPEG/GIF/SVG dimensions into asset metadata, enqueues media.thumbnail (rendition recorded); e2e-verified | transcode deferred (external worker) |
 | P6-13 | AI opt-in guards | done | PR #12 | org ai_opt_in flag; proposals blocked while opted out (403); execute only after human decide; e2e 132/132 | V1 |
 | P6-14 | Legal holds + retention | done | PR #12 | active hold blocks purge (409), release then purge runs; retention_days policy; all audited; e2e 132/132 | V1 |
+| P7-01 | MFA TOTP | done | PR #14 | RFC 6238 enroll/activate/verify; wrong code 401; e2e 159/159 | closes roadmap 6.6 gap |
+| P7-02 | OIDC login flow | done | PR #14 | authorize URL with HMAC-signed state, dev-stub code exchange, tampered state 401, audited sso.oidc_login; e2e 159/159 | closes 6.6 gap; real IdP exchange replaces stub |
+| P7-03 | Scheduled reminders | done | PR #14 | reminders on P6-11 queue, delivered via handler; e2e 159/159 | closes 6.4 gap |
+| P7-04 | API keys | done | PR #14 | issue/list/revoke, sha256-stored, x-api-key middleware auth; revoked 401 in e2e | closes 6.4 gap |
+| P7-05 | E-sign stub | done | PR #14 | envelope send/latest/complete on approvals; signer-role completion; e2e 159/159 | closes 6.5 gap; provider webhook replaces stub |
+| P7-06 | Integration health | done | PR #14 | per-integration delivery roll-up from job table; e2e 159/159 | closes 6.4 gap |
 | B-01 | Audit explorer UI | done | PR #12 | audit search API (action/actor/target/date/q) + `/audit` page; filter + free-text verified in e2e | backlog |
 | B-02 | Permissions reviews | done | PR #12 | propose/decide with separation of duties (proposer 404 on own), approved grant/revoke takes effect via role_capability_override in authz; e2e 132/132 | AccountManager gained permissions.review |
-| B-03 | Agent-attribution audit | todo | — | agent_tag column | backlog |
-| B-04 | Drift detection | todo | — | daily ledger diff | backlog |
-| B-05 | Knowledge library | todo | — | guideline landing | backlog |
-| B-06 | Account health | todo | — | engagement dashboard | backlog |
+| B-03 | Agent-attribution audit | done | PR #14 | audit_event.agent_tag from x-agent-tag via request context; agent filter on audit search; tagged + null rows verified in e2e 159/159 | backlog |
+| B-04 | Drift detection | done | PR #14 | scripts/drift-check.js exit 0, 31 rows checked; report committed ops/drift/latest.md; exit 1 on drift | backlog |
+| B-05 | Knowledge library | done | PR #14 | /library landing page with guideline/brief/QA/handover packs; web build exit 0 | backlog |
+| B-06 | Account health | done | PR #14 | per-agency engagement roll-up API + /account-health page; e2e 159/159 incl. client 403 | backlog |
 
 ## Recently completed detail
 
