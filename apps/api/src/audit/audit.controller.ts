@@ -21,11 +21,12 @@ export class AuditController {
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('q') q?: string,
+    @Query('agent') agent?: string,
   ): Promise<AuditRow[]> {
     const ctx = await this.identity.resolve(email);
     this.authz.require(ctx, Capability.AuditRead);
-    if (action || actor || targetType || from || to || q) {
-      return this.audit.search(ctx.orgId, { action, actor, targetType, from, to, q });
+    if (action || actor || agent || targetType || from || to || q) {
+      return this.audit.search(ctx.orgId, { action, actor, agent, targetType, from, to, q });
     }
     return this.audit.findAll(ctx.orgId);
   }

@@ -33,6 +33,14 @@ export class ReportsController {
     return this.reports.portfolio(ctx.orgId);
   }
 
+  /** B-06 account health dashboard (agency engagement roll-up). */
+  @Get('account-health')
+  async accountHealth(@Headers('x-user-email') email: string | undefined) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.ReportsRead);
+    return this.reports.accountHealth(ctx.orgId);
+  }
+
   @Get('sla')
   async sla(@Headers('x-user-email') email: string | undefined) {
     const ctx = await this.identity.resolve(email);

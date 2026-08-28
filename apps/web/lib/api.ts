@@ -431,6 +431,21 @@ export async function auditSearch(email: string | null, params: Record<string, s
   return api<AuditEventRow[]>(`/audit${qs ? `?${qs}` : ''}`, email);
 }
 
+export interface AccountHealthRow {
+  agency_id: string;
+  agency_name: string;
+  projects: number;
+  tasks_total: number;
+  tasks_completed: number;
+  open_approvals: number;
+  avg_decision_hours: number | null;
+  last_activity: string | null;
+}
+
+export async function accountHealth(email: string | null) {
+  return api<AccountHealthRow[]>('/reports/account-health', email);
+}
+
 export interface AutomationRuleRow {
   id: string;
   name: string;

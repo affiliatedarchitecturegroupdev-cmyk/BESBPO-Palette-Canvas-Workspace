@@ -73,11 +73,33 @@ export class IntegrationsService implements OnModuleInit {
       await this.jobs.enqueue(
         orgId,
         'webhook.deliver',
-        { targetUrl: sub.target_url, secret: sub.secret, body },
+        { integrationId: sub.id, targetUrl: sub.target_url, secret: sub.secret, body },
         { idempotencyKey: `${sub.id}:${body.emitted_at}`, maxAttempts: 3 },
       );
       enqueued++;
     }
     return enqueued;
+  }
+
+  /** P7-06: per-integration delivery health aggregated from the job table. */
+  async health(orgId: string) {
+    const { rows } = await this.db.query(
+      `SELECT i.id, i.name, i.event, i.target_url, i.active,
+              COUNT(j.id)::int AS deliveries,
+              COUNT(j.id) FILTER (WHERE j.status = 'done')::int AS delivered,
+              COUNT(j.id) FILTER (WHERE j.status = 'dead')::int AS dead,
+              MAX(j.updated_at) AS last_at,
+              (SELECT j2.status FROM job j2
+                WHERE j2.org_id = i.org_id AND j2.queue = 'webhook.deliver'
+                  AND j2.payload->>'integrationId' = i.id
+                ORDER BY j2.updated_at DESC LIMIT 1) AS last_status
+       FROM integration i
+       LEFT JOIN job j ON j.org_id = i.org_id AND j.queue = 'webhook.deliver'
+         AND j.payload->>'integrationId' = i.id
+       WHERE i.org_id = $1
+       GROUP BY i.id ORDER BY i.created_at`,
+      [orgId],
+    );
+    return rows;
   }
 }
