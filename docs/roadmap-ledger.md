@@ -54,6 +54,22 @@ who (or which agent) did it, and what remains. For scope definitions see
 | B-04 | Drift detection | done | PR #14 | scripts/drift-check.js exit 0, 31 rows checked; report committed ops/drift/latest.md; exit 1 on drift | backlog |
 | B-05 | Knowledge library | done | PR #14 | /library landing page with guideline/brief/QA/handover packs; web build exit 0 | backlog |
 | B-06 | Account health | done | PR #14 | per-agency engagement roll-up API + /account-health page; e2e 159/159 incl. client 403 | backlog |
+| P8-00 | Phase 8 schema + capability matrix (foundation for 8.01–8.15) | done | PR #16 | migrations 001–007 apply clean on fresh postgres; pos-check no non-ascii; slice-check OK; npm build exit 0; shared permission tests pass; e2e 159/159 | 12 new tables + 13 new capabilities + task.risk/risk_reason + comment.visibility + service_template.task_field_schema; API module wiring per-step still todo |
+| P8-01 | Invitations (invite/accept) | todo | — | — | — |
+| P8-02 | Confidentiality tiers | todo | — | — | — |
+| P8-03 | Scheduled recurrence | todo | — | — | — |
+| P8-04 | Saved views | todo | — | — | — |
+| P8-05 | Comment reactions | todo | — | — | — |
+| P8-06 | Attachments in comments | todo | — | — | — |
+| P8-07 | Message-to-task conversion | todo | — | — | — |
+| P8-08 | Sequential/parallel approval steps | todo | — | — | — |
+| P8-09 | Automated technical checks | todo | — | — | — |
+| P8-10 | QA reviewer assignment | todo | — | — | — |
+| P8-11 | Export log | todo | — | — | — |
+| P8-12 | Reporting deep-dive | todo | — | — | — |
+| P8-13 | Risk fields on tasks | todo | — | — | — |
+| P8-14 | Comment visibility tagging | todo | — | — | — |
+| P8-15 | Service-template task-field schema | todo | — | — | — |
 
 ## Recently completed detail
 
