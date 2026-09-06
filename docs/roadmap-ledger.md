@@ -54,7 +54,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | B-04 | Drift detection | done | PR #14 | scripts/drift-check.js exit 0, 31 rows checked; report committed ops/drift/latest.md; exit 1 on drift | backlog |
 | B-05 | Knowledge library | done | PR #14 | /library landing page with guideline/brief/QA/handover packs; web build exit 0 | backlog |
 | B-06 | Account health | done | PR #14 | per-agency engagement roll-up API + /account-health page; e2e 159/159 incl. client 403 | backlog |
-| P8-00 | Phase 8 schema + capability matrix (foundation for 8.01–8.15) | done | (this commit) | migrations 001–007 apply clean on fresh postgres; pos-check no non-ascii; slice-check OK; npm build exit  䠙0; shared permission tests pass; e2e 159/159 | 12 new tables + 13 new capabilities + task.risk/risk_reason + comment.visibility + service_template.task_field_schema; API module wiring per-step still todo |
+| P8-00 | Phase 8 schema + capability matrix (foundation for 8.01–8.15) | done | PR #16 | migrations 001–007 apply clean on fresh postgres; pos-check no non-ascii; slice-check OK; npm build exit 0; shared permission tests pass; e2e 159/159 | 12 new tables + 13 new capabilities + task.risk/risk_reason + comment.visibility + service_template.task_field_schema; API module wiring per-step still todo |
 | P8-01 | Invitations (invite/accept) | todo | — | — | — |
 | P8-02 | Confidentiality tiers | todo | — | — | — |
 | P8-03 | Scheduled recurrence | todo | — | — | — |
