@@ -48,6 +48,30 @@ Exit: **LoC ≥ 80k**, **e2e ≥ 200 checks**, integrations sandboxed.
 | 6.13 | AI opt-in guards | per-tenant opt-in flag + human review before external change | permission-test flag |
 | 6.14 | Legal holds + retention | legal_hold flag blocks purge, retention policy | e2e: blocked purge |
 
+## Phase 8 — collaboration + governance deep-dive (PDF long tail, 15 steps)
+
+| # | Scope | Exit criteria | Tests |
+| --- | --- | --- | --- |
+| 8.01 | Invitations (org-scoped invite/accept) | invite rows, unique token, accept sets person+role+binding; revoke | e2e: invite round-trip |
+| 8.02 | Confidentiality tiers | version.confidentiality + client-shared default; tiered visibility | permission test: tier enforcement |
+| 8.03 | Scheduled recurrence (weekly/biweekly/monthly/custom) | recurrence rows, next_run_at scheduling, generated tasks | e2e: recurrence tick |
+| 8.04 | Saved views (board/list/calendar filters) | saved_view rows, owner + project scoping, shared toggle | e2e: view CRUD |
+| 8.05 | Comment reactions | reaction rows (unique comment+person+emoji), emoji feed | e2e: react round-trip |
+| 8.06 | Attachments in comments | comment_asset join, asset lifecycle on delete cascade | e2e: attach + detach |
+| 8.07 | Message-to-task conversion | task_source rows (task_id, source_type, source_id), typed sources | e2e: convert thread to task |
+| 8.08 | Sequential/parallel approval steps | approval_step rows, position ordering, required_role | e2e: multi-stage approval |
+| 8.09 | Automated technical checks | technical_check rows (version-scoped, passed flag), run_at | e2e: check run + fail gate |
+| 8.10 | QA reviewer assignment | qa_reviewer rows, due_at/completed_at, assign capability | e2e: assign + complete |
+| 8.11 | Export log | export_log rows (kind, format, row_count), exports.manage gate | e2e: export recorded |
+| 8.12 | Reporting deep-dive | reports.deep_dive capability; drill-down metrics APIs | permission + snapshot |
+| 8.13 | Risk fields on tasks | task.risk + task.risk_reason columns | e2e: risk set + shown |
+| 8.14 | Comment visibility tagging | comment.visibility (internal default), target-scoped enforcement | permission test: internal hidden |
+| 8.15 | Service-template task-field schema | service_template.task_field_schema JSONB for dynamic forms | e2e: schema round-trip |
+
+Exit: **e2e ≥ 320 checks** (delta 159 → next cap), migrations idempotent, LoC continues upward.
+
+
+
 ## Backlog (never complete but must be tracked)
 
 | # | Scope | Exit criteria | Tests |

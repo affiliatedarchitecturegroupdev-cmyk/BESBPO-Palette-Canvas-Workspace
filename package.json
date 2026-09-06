@@ -9,6 +9,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
+    "start": "node apps/web/.next/standalone/server.js || npm run start -w @palette-canvas/web",
     "lint": "echo 'lint placeholder'"
   },
   "engines": {

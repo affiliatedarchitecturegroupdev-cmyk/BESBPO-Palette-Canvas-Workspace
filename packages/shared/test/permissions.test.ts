@@ -69,7 +69,7 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
 }
 {
   const caps = capabilitiesOf([Role.ClientApprover]);
-  if (caps.length !== 5 || !caps.includes(Capability.CommentsWrite) ||
+  if (caps.length !== 9 || !caps.includes(Capability.CommentsWrite) ||
       !caps.includes(Capability.NotificationsRead) || !caps.includes(Capability.ApprovalsDecide) ||
       !caps.includes(Capability.DeliverablesRead)) {
     throw new Error('client approver has projects.read + deliverables.read + comments.write + notifications.read + approvals.decide');
@@ -167,6 +167,108 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
   if (can([Role.ClientApprover], Capability.HandoverWrite) || can([Role.AgencyContributor], Capability.HandoverWrite)) {
     throw new Error('external roles must not write handover');
   }
+}
+/* Phase 7 capability matrix checks */
+
+// Invites: ops + account managers administer; clients/vendors may accept
+{
+  if (!can([Role.OperationsDirector], Capability.InvitesManage) || !can([Role.AccountManager], Capability.InvitesManage)) {
+
+    throw new Error('ops + AM must administer invites');
+
+  }
+
+  if (can([Role.AgencyContributor], Capability.InvitesManage) || can([Role.ThirdPartyVendor], Capability.InvitesManage)) {
+
+    throw new Error('external roles must not administer invites');
+
+  }
+
+}
+
+// Confidentiality tiers are ops-only manage
+{
+  if (!can([Role.OperationsDirector], Capability.TiersManage)) {
+
+    throw new Error('ops must manage confidentiality tiers');
+
+  }
+
+  if (can([Role.CreativeContributor], Capability.TiersManage)) {
+
+    throw new Error('contributors must not manage tiers');
+
+  }
+
+}
+
+// Recurrence + saved views: production ops only
+{
+  if (!can([Role.ProductionLead], Capability.RecurrenceManage) || !can([Role.ProductionLead], Capability.ViewsManage)) {
+
+
+    throw new Error('production lead must manage recurrence + views');
+
+  }
+
+  if (can([Role.ClientApprover], Capability.RecurrenceManage) || can([Role.ClientApprover], Capability.ViewsManage)) {
+
+    throw new Error('client approver must not manage recurrence or views');
+
+  }
+
+}
+
+// Reactions + comment assets open to commenters
+{
+  if (!can([Role.CreativeContributor], Capability.ReactionsWrite)) {
+
+    throw new Error('commenters must react');
+
+  }
+
+  if (!can([Role.ClientApprover], Capability.ReactionsWrite)) {
+
+    throw new Error('client approver must react');
+
+  }
+
+}
+
+// Message-to-task available to production roles
+{
+  if (!can([Role.CreativeContributor], Capability.MessageToTask)) {
+
+    throw new Error('creative contributor must convert messages to tasks');
+
+  }
+
+  if (can([Role.AgencyContributor], Capability.MessageToTask)) {
+
+    throw new Error('agency contributor must not convert messages');
+
+  }
+
+}
+
+// Approval steps + technical checks: ops + production lead
+{
+  if (!can([Role.OperationsDirector], Capability.ApprovalStepsWrite) || !can([Role.ProductionLead], Capability.TechnicalChecksWrite)) {
+
+    throw new Error('ops + lead must write approval steps + technical checks');
+
+  }
+
+}
+
+// Exports: ops + finance;deep-dive reports: ops + finance
+{
+  if (!can([Role.FinanceUser], Capability.ExportsManage) || !can([Role.FinanceUser], Capability.ReportsDeepDive)) {
+
+    throw new Error('finance must export + read deep-dive reports');
+
+  }
+
 }
 
 console.log('permission tests passed');
