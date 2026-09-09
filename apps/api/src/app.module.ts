@@ -63,6 +63,24 @@ import { LegalController } from './legal/legal.controller';
 import { PermissionsReviewsService } from './permissions/reviews.service';
 import { PermissionsReviewsController } from './permissions/reviews.controller';
 import { EsignController } from './proofing/esign.controller';
+import { InvitesController } from './invites/invites.controller';
+import { InvitesService } from './invites/invites.service';
+import { RecurrenceController } from './recurrence/recurrence.controller';
+import { RecurrenceService } from './recurrence/recurrence.service';
+import { CommentActionsController } from './comment-actions/comment-actions.controller';
+import { CommentActionsService } from './comment-actions/comment-actions.service';
+import { ViewsController } from './views/views.controller';
+import { ViewsService } from './views/views.service';
+import { ApprovalStepsController } from './approval-steps/approval-steps.controller';
+import { ApprovalStepsService } from './approval-steps/approval-steps.service';
+import { QualityController } from './quality/quality.controller';
+import { QualityService } from './quality/quality.service';
+import { ExportsController } from './exports/exports.controller';
+import { ExportsService } from './exports/exports.service';
+import { RiskController } from './risk/risk.controller';
+import { RiskService } from './risk/risk.service';
+import { TemplateSchemasController } from './template-schemas/template-schemas.controller';
+import { TemplateSchemasService } from './template-schemas/template-schemas.service';
 
 @Module({
   imports: [SecurityModule],
@@ -77,6 +95,7 @@ import { EsignController } from './proofing/esign.controller';
     ProjectsController,
     TasksController,
     DeliverablesController,
+    CommentActionsController,
     CommentsController,
     NotificationsController,
     WorkloadController,
@@ -96,6 +115,14 @@ import { EsignController } from './proofing/esign.controller';
     ApiKeysController,
     MfaController,
     EsignController,
+    InvitesController,
+    RecurrenceController,
+    ViewsController,
+    ApprovalStepsController,
+    QualityController,
+    ExportsController,
+    RiskController,
+    TemplateSchemasController,
   ],
   providers: [
     Database,
@@ -131,6 +158,15 @@ import { EsignController } from './proofing/esign.controller';
     AiService,
     LegalService,
     PermissionsReviewsService,
+    InvitesService,
+    RecurrenceService,
+    CommentActionsService,
+    ViewsService,
+    ApprovalStepsService,
+    QualityService,
+    ExportsService,
+    RiskService,
+    TemplateSchemasService,
   ],
 })
 export class AppModule implements NestModule {

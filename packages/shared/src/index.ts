@@ -162,6 +162,7 @@ export enum Capability {
   QaReviewAssign = 'qa.review.assign',
   ExportsManage = 'exports.manage',
   ReportsDeepDive = 'reports.deep_dive',
+  RiskManage = 'risk.manage',
 }
 
 /** Which roles hold which capabilities (PDF section 1 role table). */
@@ -180,6 +181,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.IdentityGrant,
     Capability.TasksRead,
     Capability.TasksWrite,
+    Capability.RiskManage,
     Capability.DeliverablesRead,
     Capability.DeliverablesWrite,
     Capability.CommentsWrite,
@@ -240,6 +242,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.TemplatesRead,
     Capability.TasksRead,
     Capability.TasksWrite,
+    Capability.RiskManage,
     Capability.DeliverablesRead,
     Capability.DeliverablesWrite,
     Capability.CommentsWrite,
@@ -278,6 +281,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.ProjectsManage,
     Capability.TasksRead,
     Capability.TasksWrite,
+    Capability.RiskManage,
     Capability.DeliverablesRead,
     Capability.DeliverablesWrite,
     Capability.CommentsWrite,
@@ -320,6 +324,7 @@ export const ROLE_CAPABILITIES: Record<Role, readonly Capability[]> = {
     Capability.ProjectsRead,
     Capability.TasksRead,
     Capability.TasksWrite,
+    Capability.RiskManage,
     Capability.CommentsWrite,
     Capability.NotificationsRead,
     Capability.TimeLog,

@@ -55,21 +55,21 @@ who (or which agent) did it, and what remains. For scope definitions see
 | B-05 | Knowledge library | done | PR #14 | /library landing page with guideline/brief/QA/handover packs; web build exit 0 | backlog |
 | B-06 | Account health | done | PR #14 | per-agency engagement roll-up API + /account-health page; e2e 159/159 incl. client 403 | backlog |
 | P8-00 | Phase 8 schema + capability matrix (foundation for 8.01–8.15) | done | PR #16 | migrations 001–007 apply clean on fresh postgres; pos-check no non-ascii; slice-check OK; npm build exit 0; shared permission tests pass; e2e 159/159 | 12 new tables + 13 new capabilities + task.risk/risk_reason + comment.visibility + service_template.task_field_schema; API module wiring per-step still todo |
-| P8-01 | Invitations (invite/accept) | todo | — | — | — |
-| P8-02 | Confidentiality tiers | todo | — | — | — |
-| P8-03 | Scheduled recurrence | todo | — | — | — |
-| P8-04 | Saved views | todo | — | — | — |
-| P8-05 | Comment reactions | todo | — | — | — |
-| P8-06 | Attachments in comments | todo | — | — | — |
-| P8-07 | Message-to-task conversion | todo | — | — | — |
-| P8-08 | Sequential/parallel approval steps | todo | — | — | — |
-| P8-09 | Automated technical checks | todo | — | — | — |
-| P8-10 | QA reviewer assignment | todo | — | — | — |
-| P8-11 | Export log | todo | — | — | — |
-| P8-12 | Reporting deep-dive | todo | — | — | — |
-| P8-13 | Risk fields on tasks | todo | — | — | — |
-| P8-14 | Comment visibility tagging | todo | — | — | — |
-| P8-15 | Service-template task-field schema | todo | — | — | — |
+| P8-01 | Invitations (invite/accept) | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | token-only self-service accept (no pre-existing person required) |
+| P8-02 | Confidentiality tiers | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | external roles (client_approver, third_party_vendor) never see internal versions |
+| P8-03 | Scheduled recurrence | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `recurrence` module + `active` toggle |
+| P8-04 | Saved views | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `views` module |
+| P8-05 | Comment reactions | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | controller route order fixed so `:id/reactions` is not shadowed |
+| P8-06 | Attachments in comments | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | detach `RETURNING comment_id, asset_id` (composite PK)) |
+| P8-07 | Message-to-task conversion | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | conversion applies to non-task-scoped comments |
+| P8-08 | Sequential/parallel approval steps | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `approval-steps` module (ORDER BY) |
+| P8-09 | Automated technical checks | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `quality` module `check_name`/`created_by` schema alignment |
+| P8-10 | QA reviewer assignment | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `qa_reviewer.created_by` insert fixed |
+| P8-11 | Export log | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `exports` module |
+| P8-12 | Reporting deep-dive | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | uses `time_entry` (time_log did not exist) + `change_request.status` |
+| P8-13 | Risk fields on tasks | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `risk` module `risk_reason` kept |
+| P8-14 | Comment visibility tagging | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `comment.visibility` + controller role filter |
+| P8-15 | Service-template task-field schema | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `template-schemas` module |
 
 ## Recently completed detail
 
