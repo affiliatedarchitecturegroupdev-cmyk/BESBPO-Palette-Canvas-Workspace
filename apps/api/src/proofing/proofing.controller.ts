@@ -21,7 +21,8 @@ export class ProofingController {
   @Get('versions/:deliverableId')
   async listVersions(@Headers('x-user-email') email: string | undefined, @Param('deliverableId') deliverableId: string) {
     const ctx = await this.identity.resolve(email);
-    return this.versions.list(ctx.orgId, deliverableId);
+    const external = ctx.roles.some((r) => String(r) === 'client_approver' || String(r) === 'third_party_vendor');
+    return this.versions.list(ctx.orgId, deliverableId, external);
   }
 
   @Post('versions/:deliverableId')
@@ -33,6 +34,19 @@ export class ProofingController {
     const ctx = await this.identity.resolve(email);
     this.authz.require(ctx, Capability.VersionsWrite);
     return this.versions.create(ctx.orgId, ctx.userId, deliverableId, body);
+  }
+
+  /* P8-02 confidentiality tiers: ops-only manage on a version. */
+
+  @Patch('versions/:versionId/confidentiality')
+  async setConfidentiality(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('versionId') versionId: string,
+    @Body() body: { confidentiality: 'client_shared' | 'qa_only' | 'internal' },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.TiersManage);
+    return this.versions.setConfidentiality(ctx.orgId, versionId, body.confidentiality);
   }
 
   @Get('versions/:versionId/qa')

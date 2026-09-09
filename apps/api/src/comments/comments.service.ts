@@ -7,6 +7,7 @@ export interface CommentRow {
   id: string;
   target_type: string;
   target_id: string;
+  visibility: string;
   body: string;
   mentions: string[];
   created_by: string;
@@ -22,10 +23,13 @@ export class CommentsService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async list(orgId: string, targetType: string, targetId: string): Promise<CommentRow[]> {
+  /** Roles treated as external hide  comments (P8-14). */
+  async list(orgId: string, targetType: string, targetId: string, actorRoles: string[] = []): Promise<CommentRow[]> {
+    const isExternal = actorRoles.some((r) => r === 'client_approver' || r === 'third_party_vendor');
+    const clause = isExternal ? " AND visibility <> 'internal'" : '';
     const { rows } = await this.db.query<CommentRow>(
-      `SELECT id, target_type, target_id, body, mentions, created_by, created_at, resolved
-       FROM comment WHERE org_id = $1 AND target_type = $2 AND target_id = $3
+      `SELECT id, target_type, target_id, body, mentions, visibility, created_by, created_at, resolved
+       FROM comment WHERE org_id = $1 AND target_type = $2 AND target_id = $3${clause}
        ORDER BY created_at`,
       [orgId, targetType, targetId],
     );
@@ -53,13 +57,14 @@ export class CommentsService {
     targetId: string,
     body: string,
     mentions: string[] = [],
+    visibility: string = 'internal',
   ): Promise<CommentRow> {
     const ids = await this.mentionIds(orgId, body, mentions);
     const row = await this.db.one<CommentRow>(
-      `INSERT INTO comment (id, org_id, target_type, target_id, body, mentions, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)
-       RETURNING id, target_type, target_id, body, mentions, created_by, created_at, resolved`,
-      [randomUUID(), orgId, targetType, targetId, body, JSON.stringify(ids), createdBy] as never[],
+      `INSERT INTO comment (id, org_id, target_type, target_id, body, mentions, visibility, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       RETURNING id, target_type, target_id, body, mentions, visibility, created_by, created_at, resolved`,
+      [randomUUID(), orgId, targetType, targetId, body, JSON.stringify(ids), visibility, createdBy] as never[],
     );
     for (const mentionedId of ids) {
       await this.notifications.emit(

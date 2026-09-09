@@ -1,6 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { Database } from '../db/database';
 
+export interface DeepDiveRow {
+  workspace_id: string;
+​   workspace_name: string;
+​   workstreams: number;
+​   deliverables: number;
+​   versions: number;
+​   open_tasks: number;
+​   completed_tasks: number;
+​   open_approvals: number;
+​   accepted_changes: number;
+​   active_handovers: number;
+​   total_logged_hours: number | null;
+}
+
 export interface UtilisationRow {
   person_id: string;
   name: string;
@@ -176,5 +190,35 @@ export class ReportsService {
       status: r.status,
       breached: !!r.due_date && r.due_date < today,
     }));
+  }
+
+  /** P8-15 deep-dive report: ops/finance per-workspace roll-up. */
+  async deepDive(orgId: string): Promise<DeepDiveRow[]> {
+    const { rows } = await this.db.query<DeepDiveRow>(
+      `SELECT p.id AS workspace_id, p.name AS workspace_name,
+              COUNT(DISTINCT ws.id)::int AS workstreams,
+              COUNT(DISTINCT d.id)::int AS deliverables,
+              COUNT(DISTINCT v.id)::int AS versions,
+              COUNT(DISTINCT t.id) FILTER (WHERE t.status <> 'done')::int AS open_tasks,
+              COUNT(DISTINCT t.id) FILTER (WHERE t.status = 'done')::int AS completed_tasks,
+              COUNT(DISTINCT ap.id) FILTER (WHERE ap.decision IS NULL)::int AS open_approvals,
+              COUNT(DISTINCT cr.id) FILTER (WHERE cr.status = 'accepted')::int AS accepted_changes,
+              COUNT(DISTINCT h.id) FILTER (WHERE h.status IN ('ready','delivered'))::int AS active_handovers,
+              SUM(tl.hours)::numeric AS total_logged_hours
+       FROM project p
+       LEFT JOIN workstream ws ON ws.project_id = p.id
+       LEFT JOIN deliverable d ON d.project_id = p.id
+       LEFT JOIN version v ON v.deliverable_id = d.id
+       LEFT JOIN task t ON t.project_id = p.id
+       LEFT JOIN approval ap ON ap.version_id = v.id
+       LEFT JOIN change_request cr ON cr.project_id = p.id
+       LEFT JOIN handover_package h ON h.project_id = p.id
+       LEFT JOIN time_entry tl ON tl.task_id = t.id
+       WHERE p.org_id = $1
+       GROUP BY p.id,p.name ORDER BY p.name`,
+      [orgId],
+    );
+    return rows.map((r) => ({ ...r, total_logged_hours: r.total_logged_hours === null ? null : Number(r.total_logged_hours) }));
+
   }
 }

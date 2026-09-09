@@ -47,4 +47,11 @@ export class ReportsController {
     this.authz.require(ctx, Capability.ReportsRead);
     return this.reports.sla(ctx.orgId);
   }
+
+  @Get('deep-dive')
+  async deepDive(@Headers('x-user-email') email: string | undefined) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.ReportsRead);
+    return this.reports.deepDive(ctx.orgId);
+  }
 }

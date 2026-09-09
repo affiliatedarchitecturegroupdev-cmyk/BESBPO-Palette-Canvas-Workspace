@@ -368,6 +368,7 @@ async function main() {
       },
     });
     check('comment created', comment.status === 201);
+    const commentId = (comment.json as { id: string }).id;
     const afterMention = await api(base, '/notifications', { email: 'lead@test.example' });
     check('mention notification delivered',
       ((afterMention.json as { items: Array<{ kind: string }> }).items ?? []).some((n) => n.kind === 'mentioned'));
@@ -1009,6 +1010,203 @@ async function main() {
     const acctRows = acctHealth.json as Array<{ agency_name: string; projects: number; tasks_completed: number }>;
     check('account health roll-up', acctHealth.status === 200 && acctRows.length >= 1 &&
       acctRows.some((r) => r.projects >= 1));
+
+    /* ---- Phase 8: P8-01..P8-15 ---- */
+    console.log('e2e: invites (P8-01)');
+    const invite = await api(base, '/invites', {
+      email: 'ops@test.example', method: 'POST',
+      body: { email: 'newcomer@test.example', role: 'creative_contributor', scopeType: 'organisation', scopeId: orgId },
+    });
+    check('invite created', invite.status === 201);
+    const tok = (invite.json as { token: string }).token;
+    check('invite carries single-use token', typeof tok === 'string' && tok.length >= 20);
+    const inviteList = await api(base, '/invites', { email: 'ops@test.example' });
+    check('invite listed', (inviteList.json as unknown[]).length >= 1);
+    const inviteForbidden = await api(base, '/invites', { email: 'client@test.example', method: 'POST', body: { email: 'x@test.example', role: 'creative_contributor', scopeType: 'organisation', scopeId: orgId } });
+    check('client cannot manage invites (403)', inviteForbidden.status === 403);
+    const inviteAccepted = await api(base, '/invites/accept', {
+      email: 'newcomer@test.example', method: 'POST',
+      body: { token: tok, name: 'New Comer' },
+    });
+    check('invite accepted by newcomer', inviteAccepted.status === 200 || inviteAccepted.status === 201);
+
+    console.log('e2e: version confidentiality (P8-02)');
+    const conf = await api(base, `/proofing/versions/${v1Id}/confidentiality`, {
+      email: 'ops@test.example', method: 'PATCH', body: { confidentiality: 'internal' },
+    });
+    check('confidentiality set by ops', conf.status === 200 && (conf.json as { confidentiality: string }).confidentiality === 'internal');
+    const confForbidden = await api(base, `/proofing/versions/${v1Id}/confidentiality`, {
+      email: 'client@test.example', method: 'PATCH', body: { confidentiality: 'internal' },
+    });
+    check('client cannot set confidentiality (403)', confForbidden.status === 403);
+    const versionsOps = await api(base, `/proofing/versions/${dlId}`, { email: 'ops@test.example' });
+    check('internal role sees internal version', (versionsOps.json as unknown[]).some((v: { confidentiality: string }) => v.confidentiality === 'internal'));
+    const versionsClient = await api(base, `/proofing/versions/${dlId}`, { email: 'client@test.example' });
+    check('external client hides internal version', !(versionsClient.json as unknown[]).some((v: { confidentiality: string }) => v.confidentiality === 'internal'));
+
+    console.log('e2e: exports (P8-03)');
+    const exportRec = await api(base, '/exports', {
+      email: 'ops@test.example', method: 'POST', body: { kind: 'tasks', format: 'csv', rowCount: 42 },
+    });
+    check('export recorded', exportRec.status === 201);
+    const exportList = await api(base, '/exports', { email: 'ops@test.example' });
+    check('exports listed', (exportList.json as unknown[]).length >= 1);
+    const exportForbidden = await api(base, '/exports', { email: 'client@test.example', method: 'POST', body: { kind: 'tasks', format: 'xlsx' } });
+    check('client cannot record exports (403)', exportForbidden.status === 403);
+
+    console.log('e2e: risk register (P8-04)');
+    const risk = await api(base, `/projects/${project.id}/risks`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { title: 'Talent slippage', severity: 'high' },
+    });
+    check('risk created', risk.status === 201);
+    const riskId = (risk.json as { id: string }).id;
+    const riskPatch = await api(base, `/projects/${project.id}/risks/${riskId}`, {
+      email: 'am@test.example', method: 'PATCH', body: { status: 'mitigated' },
+    });
+    check('risk mitigated by AM', riskPatch.status === 200 && (riskPatch.json as { status: string }).status === 'mitigated');
+    const riskList = await api(base, `/projects/${project.id}/risks`, { email: 'lead@test.example' });
+    check('risk listed', (riskList.json as unknown[]).length === 1);
+    const riskForbidden = await api(base, `/projects/${project.id}/risks`, { email: 'client@test.example', method: 'POST', body: { title: 'nope' } });
+    check('client cannot create risk (403)', riskForbidden.status === 403);
+
+    console.log('e2e: reaction + assets (P8-05/P8-06)');
+    const re = await api(base, `/comments/${commentId}/reactions`, {
+      email: 'am@test.example', method: 'POST', body: { emoji: 'heart' },
+    });
+    check('reaction added', re.status === 201);
+    const reList = await api(base, `/comments/${commentId}/reactions`, { email: 'am@test.example' });
+    check('reaction listed', (reList.json as unknown[]).length >= 1);
+    const reRemove = await api(base, `/comments/${commentId}/reactions/heart`, {
+      email: 'am@test.example', method: 'DELETE',
+    });
+    check('reaction removed', reRemove.status === 200, String(reRemove.status));
+    const reForbidden = await api(base, `/comments/${commentId}/reactions`, { email: 'agency-a@test.example', method: 'POST', body: { emoji: 'heart' } });
+    check('agency cannot add reactions (403)', reForbidden.status === 403);
+    const cmtAsset = await api(base, '/assets', {
+      email: 'lead@test.example', method: 'POST',
+      body: { key: 'logo-raw.png', contentType: 'image/png', dataBase64: pngB64 },
+    });
+    check('asset created', cmtAsset.status === 201);
+    const cmtAssetId = (cmtAsset.json as { id: string }).id;
+    const attach = await api(base, `/comments/${commentId}/assets`, {
+      email: 'am@test.example', method: 'POST', body: { assetId: cmtAssetId },
+    });
+    check('asset attached to comment', attach.status === 201);
+    const detach = await api(base, `/comments/${commentId}/assets/${cmtAssetId}`, {
+      email: 'am@test.example', method: 'DELETE',
+    });
+    check('asset detached', detach.status === 200, String(detach.status));
+    const attachForbidden = await api(base, `/comments/${commentId}/assets`, { email: 'client@test.example', method: 'POST', body: { assetId: cmtAssetId } });
+    check('client cannot attach assets (403)', attachForbidden.status === 403);
+
+    console.log('e2e: message-to-task (P8-07)');
+    const projectComment = await api(base, '/comments', {
+      email: 'am@test.example', method: 'POST',
+      body: { targetType: 'project', targetId: project.id, body: 'meeting note worth a task' },
+    });
+    check('project comment created', projectComment.status === 201);
+    const projectCommentId = (projectComment.json as { id: string }).id;
+    const mt = await api(base, `/comments/${projectCommentId}/to-task`, {
+      email: 'am@test.example', method: 'POST', body: { projectId: project.id },
+    });
+    check('comment converted to task', mt.status === 201);
+    const mtForbidden = await api(base, `/comments/${projectCommentId}/to-task`, { email: 'client@test.example', method: 'POST', body: { projectId: project.id } });
+    check('client cannot convert comment to task (403)', mtForbidden.status === 403);
+
+    console.log('e2e: approval steps (P8-08)');
+    const step = await api(base, '/approval-steps', {
+      email: 'am@test.example', method: 'POST',
+      body: { projectId: project.id, name: 'Brand sign-off' },
+    });
+    check('approval step created', step.status === 201);
+    const stepId = (step.json as { id: string }).id;
+    const stepComplete = await api(base, `/approval-steps/${stepId}/complete`, {
+      email: 'am@test.example', method: 'POST', body: {},
+    });
+    check('approval step completed', stepComplete.status === 200 || stepComplete.status === 201, String(stepComplete.status));
+    const stepProgress = await api(base, `/approval-steps/progress?projectId=${project.id}`, { email: 'lead@test.example' });
+    check('approval step progress readable', stepProgress.status === 200 && typeof stepProgress.json === 'object');
+    const stepForbidden = await api(base, '/approval-steps', { email: 'client@test.example', method: 'POST', body: { projectId: project.id, name: 'x' } });
+    check('client cannot manage approval steps (403)', stepForbidden.status === 403);
+
+    console.log('e2e: technical checks (P8-09)');
+    const tc = await api(base, `/proofing/versions/${v2Id}/technical-checks`, {
+      email: 'ops@test.example', method: 'POST', body: { name: 'resolution', passed: true },
+    });
+    check('technical check recorded', tc.status === 201);
+    const tcList = await api(base, `/proofing/versions/${v2Id}/technical-checks`, { email: 'lead@test.example' });
+    check('technical checks readable', Array.isArray(tcList.json));
+    const tcForbidden = await api(base, `/proofing/versions/${v2Id}/technical-checks`, { email: 'client@test.example', method: 'POST', body: { name: 'x', passed: true } });
+    check('client cannot run technical checks (403)', tcForbidden.status === 403);
+
+    console.log('e2e: qa reviewers (P8-10)');
+    const qr = await api(base, `/proofing/versions/${v2Id}/qa-reviewers`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { reviewerId: personRows.rows[0].id },
+    });
+    check('qa reviewer assigned', qr.status === 201);
+    const qrList = await api(base, `/proofing/versions/${v2Id}/qa-reviewers`, { email: 'lead@test.example' });
+    check('qa reviewers listed', Array.isArray(qrList.json));
+    const qrForbidden = await api(base, `/proofing/versions/${v2Id}/qa-reviewers`, { email: 'client@test.example', method: 'POST', body: { reviewerId: personRows.rows[0].id } });
+    check('client cannot assign qa reviewer (403)', qrForbidden.status === 403);
+
+    console.log('e2e: recurrence (P8-11)');
+    const rec = await api(base, '/recurrences', {
+      email: 'am@test.example', method: 'POST',
+      body: { projectId: project.id, cadence: 'weekly' },
+    });
+    check('recurrence rule created', rec.status === 201);
+    const recId = (rec.json as { id: string }).id;
+    const recTick = await api(base, `/recurrences/${recId}/tick`, { email: 'am@test.example', method: 'POST', body: {} });
+    check('recurrence tick spawns tasks', recTick.status === 200 || recTick.status === 201, String(recTick.status));
+    const recOff = await api(base, `/recurrences/${recId}/active`, { email: 'am@test.example', method: 'POST', body: { active: false } });
+    check('recurrence deactivated', (recOff.status === 200 || recOff.status === 201) && (recOff.json as { active: boolean }).active === false, String((recOff.json as { active: boolean }).active));
+    const recForbidden = await api(base, '/recurrences', { email: 'client@test.example', method: 'POST', body: { projectId: project.id } });
+    check('client cannot manage recurrence (403)', recForbidden.status === 403);
+
+    console.log('e2e: saved views (P8-14)');
+    const view = await api(base, '/views', {
+      email: 'am@test.example', method: 'POST',
+      body: { projectId: project.id, name: 'My board', kind: 'board', filters: { status: ['in_progress'] } },
+    });
+    check('saved view created', view.status === 201);
+    const viewPatch = await api(base, `/views/${(view.json as { id: string }).id}`, {
+      email: 'am@test.example', method: 'PATCH', body: { shared: true },
+    });
+    check('saved view patched', viewPatch.status === 200);
+    const viewList = await api(base, `/views?projectId=${project.id}`, { email: 'am@test.example' });
+    check('saved view listed', (viewList.json as unknown[]).length >= 1);
+    const viewForbidden = await api(base, '/views', { email: 'client@test.example', method: 'POST', body: { projectId: project.id, name: 'x' } });
+    check('client cannot create saved view (403)', viewForbidden.status === 403);
+
+    console.log('e2e: template schemas (P8-13)');
+    const tpl = await api(base, '/template-schemas', {
+      email: 'ops@test.example', method: 'POST',
+      body: { workstreamId: wsId, name: 'Logo brief', schema: { sections: ['overview'] } },
+    });
+    check('template schema created', tpl.status === 201);
+    const tplList = await api(base, `/template-schemas?workstreamId=${wsId}`, { email: 'ops@test.example' });
+    check('template schemas listed for workstream', (tplList.json as unknown[]).length === 1);
+    const tplForbidden = await api(base, '/template-schemas', { email: 'lead@test.example', method: 'POST', body: { workstreamId: wsId, name: 'x', schema: {} } });
+    check('lead cannot manage template schemas (403)', tplForbidden.status === 403);
+
+    console.log('e2e: comments visibility internal (P8-14)');
+    const internalComment = await api(base, '/comments', {
+      email: 'lead@test.example', method: 'POST',
+      body: { targetType: 'task', targetId: t1Id, body: 'internal note — do not share', visibility: 'internal' },
+    });
+    check('internal comment created', internalComment.status === 201);
+    const threadInternal = await api(base, `/comments/task/${t1Id}`, { email: 'ops@test.example' });
+    check('internal role sees internal comment', (threadInternal.json as unknown[]).some((c: { body: string }) => c.body.includes('internal note')));
+    const threadExternal = await api(base, `/comments/task/${t1Id}`, { email: 'client@test.example' });
+    check('external client hides internal comment', !(threadExternal.json as unknown[]).some((c: { body: string }) => c.body.includes('internal note')));
+
+    console.log('e2e: reports deep-dive (P8-15)');
+    const deep = await api(base, '/reports/deep-dive', { email: 'ops@test.example' });
+    check('deep-dive report rolls up per workspace', deep.status === 200 && Array.isArray(deep.json));
+    const deepForbidden = await api(base, '/reports/deep-dive', { email: 'client@test.example' });
+    check('client cannot read deep-dive (403)', deepForbidden.status === 403);
     const acctForbidden = await api(base, '/reports/account-health', { email: 'client@test.example' });
     check('client cannot read account health (403)', acctForbidden.status === 403);
   } finally {
