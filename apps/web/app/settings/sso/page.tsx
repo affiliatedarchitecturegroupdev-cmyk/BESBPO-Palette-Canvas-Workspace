@@ -1,4 +1,5 @@
 import { currentEmail, ssoConfigs } from '@/lib/api';
+import { Badge, Card, DataTable, EmptyState, PageHeader } from '../../components/ui';
 
 /** P6-06: SSO/SCIM configuration (scaffolding — OIDC dance lands later). */
 export default async function SsoPage() {
@@ -17,34 +18,26 @@ export default async function SsoPage() {
 
   return (
     <main>
-      <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>Single sign-on</h1>
-      <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginTop: 4 }}>
-        OIDC provider configuration per organisation. SCIM provisioning is available at
-        <code> POST /identity/sso/scim/users</code> with the configured bearer token.
-      </p>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 24, fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', color: 'var(--ink-faint)', fontSize: 11 }}>
-            <th>Issuer</th><th>Client ID</th><th>MFA</th><th>Configured</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map((s) => (
-            <tr key={s.id} style={{ borderTop: '1px solid var(--line)' }}>
-              <td style={{ padding: '10px 0', color: 'var(--ink)', wordBreak: 'break-all' }}>{s.issuer}</td>
-              <td><code style={{ fontSize: 12 }}>{s.client_id}</code></td>
-              <td>{s.mfa_required ? 'required' : 'optional'}</td>
-              <td style={{ color: 'var(--ink-faint)' }}>{s.created_at.slice(0, 10)}</td>
-            </tr>
-          ))}
-          {list.length === 0 && (
-            <tr><td colSpan={4} style={{ padding: '20px 0', color: 'var(--ink-faint)' }}>No SSO provider configured.</td></tr>
-          )}
-        </tbody>
-      </table>
-      <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 20 }}>
-        Configure via <code>POST /identity/sso</code> (identity.sso.manage capability).
-      </p>
+      <PageHeader
+        eyebrow="Govern"
+        title="Single sign-on"
+        subtitle="OIDC provider configuration per organisation. SCIM provisioning is available via POST /identity/sso/scim/users with the configured bearer token."
+      />
+      <DataTable
+        columns={[
+          { key: 'issuer', header: 'Issuer', render: (s) => <span style={{ wordBreak: 'break-all', color: 'var(--ink)', fontWeight: 600 }}>{s.issuer}</span> },
+          { key: 'client', header: 'Client ID', render: (s) => <code style={{ fontSize: 12 }}>{s.client_id}</code> },
+          { key: 'mfa', header: 'MFA', render: (s) => (s.mfa_required ? <Badge status="blocked">required</Badge> : <Badge status="draft">optional</Badge>) },
+          { key: 'created', header: 'Configured', render: (s) => <span style={{ color: 'var(--ink-faint)' }}>{s.created_at.slice(0, 10)}</span> },
+        ]}
+        rows={list}
+        empty={<EmptyState title="No SSO provider configured" body="Add an OIDC provider to enable single sign-on for the organisation." />}
+      />
+      <Card style={{ padding: 14, marginTop: 16 }}>
+        <p style={{ fontSize: 12, color: 'var(--ink-faint)', margin: 0 }}>
+          Configure via <code>POST /identity/sso</code> (identity.sso.manage capability).
+        </p>
+      </Card>
     </main>
   );
 }

@@ -1,4 +1,5 @@
 import { currentEmail, agencies, brands } from '@/lib/api';
+import { Badge, Card, EmptyState, PageHeader } from '../components/ui';
 
 export default async function DirectoryPage() {
   const email = await currentEmail();
@@ -9,35 +10,68 @@ export default async function DirectoryPage() {
 
   return (
     <main>
-      <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, marginTop: 0 }}>Directory</h1>
-      <p style={{ color: 'var(--ink-dim)', fontSize: 13 }}>
-        Agencies, client accounts, and brands — scoped to your role bindings.
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginTop: 20 }}>
-        <section style={{ border: '1px solid var(--line)', background: 'var(--paper-raise)', padding: 20 }}>
-          <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>Agencies</h2>
-          <ul style={{ fontSize: 13, color: 'var(--ink-dim)', paddingLeft: 18 }}>
-            {agencyRes.map((a) => (
-              <li key={a.id} style={{ marginTop: 6 }}>
-                <strong style={{ color: 'var(--ink)' }}>{a.name}</strong>
-                {' · '}
-                {a.confidentiality_tier} · health {a.health}
-              </li>
-            ))}
-          </ul>
-        </section>
-        <section style={{ border: '1px solid var(--line)', background: 'var(--paper-raise)', padding: 20 }}>
-          <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>Brands</h2>
-          <ul style={{ fontSize: 13, color: 'var(--ink-dim)', paddingLeft: 18 }}>
-            {brandRes.map((b) => (
-              <li key={b.id} style={{ marginTop: 6 }}>
-                <strong style={{ color: 'var(--ink)' }}>{b.name}</strong>
-                {' · '}
-                {agencyRes.find((a) => a.id === b.agency_id)?.name ?? '—'}
-              </li>
-            ))}
-          </ul>
-        </section>
+      <PageHeader
+        eyebrow="Connect"
+        title="Directory"
+        subtitle="Agencies, client accounts, and brands — scoped to your role bindings."
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        <Card style={{ padding: 20 }}>
+          <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 600, margin: 0, fontSize: 17, marginBottom: 12 }}>
+            Agencies
+          </h2>
+          {agencyRes.length === 0 ? (
+            <EmptyState title="No agencies" body="Agencies you can view will appear here." />
+          ) : (
+            <ul style={{ fontSize: 13.5, color: 'var(--ink-dim)', padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+              {agencyRes.map((a) => (
+                <li
+                  key={a.id}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--brand-base)',
+                    border: '1px solid var(--line)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <strong style={{ color: 'var(--ink)', flex: 1 }}>{a.name}</strong>
+                  <Badge status={a.health}>{a.health}</Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+        <Card style={{ padding: 20 }}>
+          <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 600, margin: 0, fontSize: 17, marginBottom: 12 }}>
+            Brands
+          </h2>
+          {brandRes.length === 0 ? (
+            <EmptyState title="No brands" body="Brands under your agencies will appear here." />
+          ) : (
+            <ul style={{ fontSize: 13.5, color: 'var(--ink-dim)', padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
+              {brandRes.map((b) => (
+                <li
+                  key={b.id}
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--brand-base)',
+                    border: '1px solid var(--line)',
+                  }}
+                >
+                  <strong style={{ color: 'var(--ink)' }}>{b.name}</strong>
+                  <span style={{ color: 'var(--ink-faint)' }}>
+                    {' · '}
+                    {agencyRes.find((a) => a.id === b.agency_id)?.name ?? '—'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
       </div>
     </main>
   );

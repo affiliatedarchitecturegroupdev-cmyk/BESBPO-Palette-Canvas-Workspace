@@ -1,11 +1,14 @@
 import { auditSearch, currentEmail } from '@/lib/api';
+import { Card, DataTable, PageHeader } from '../components/ui';
 
 const inputStyle = {
-  background: 'var(--paper)',
+  background: 'var(--brand-base)',
   border: '1px solid var(--line)',
   color: 'var(--ink)',
+  fontFamily: 'var(--mono)',
   fontSize: 13,
-  padding: '6px 10px',
+  padding: '8px 12px',
+  borderRadius: 'var(--radius-sm)',
 } as const;
 
 /** B-01: audit explorer — searchable org audit trail (filters via GET form). */
@@ -37,42 +40,73 @@ export default async function AuditPage({
 
   return (
     <main>
-      <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>Audit explorer</h1>
-      <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginTop: 4 }}>
-        every high-risk action, filterable — {rows.length} events
-      </p>
+      <PageHeader
+        eyebrow="Govern"
+        title="Audit explorer"
+        subtitle={`Every high-risk action, filterable — ${rows.length} events.`}
+      />
 
-      <form method="get" style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
-        <input name="q" placeholder="search text" defaultValue={filters.q} style={inputStyle} aria-label="Search text" />
-        <input name="action" placeholder="action (e.g. estimate.approved)" defaultValue={filters.action} style={inputStyle} aria-label="Action" />
-        <input name="targetType" placeholder="target type" defaultValue={filters.targetType} style={inputStyle} aria-label="Target type" />
-        <input name="from" type="date" defaultValue={filters.from} style={inputStyle} aria-label="From date" />
-        <input name="to" type="date" defaultValue={filters.to} style={inputStyle} aria-label="To date" />
-        <button type="submit" style={{ ...inputStyle, cursor: 'pointer' }}>Filter</button>
-      </form>
+      <Card style={{ padding: 16, marginBottom: 20 }}>
+        <form method="get" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <input name="q" placeholder="search text" defaultValue={filters.q} style={inputStyle} aria-label="Search text" />
+          <input name="action" placeholder="action (e.g. estimate.approved)" defaultValue={filters.action} style={inputStyle} aria-label="Action" />
+          <input name="targetType" placeholder="target type" defaultValue={filters.targetType} style={inputStyle} aria-label="Target type" />
+          <input name="from" type="date" defaultValue={filters.from} style={inputStyle} aria-label="From date" />
+          <input name="to" type="date" defaultValue={filters.to} style={inputStyle} aria-label="To date" />
+          <button
+            type="submit"
+            style={{
+              ...inputStyle,
+              cursor: 'pointer',
+              background: 'var(--accent)',
+              color: '#fff',
+              fontFamily: 'var(--sans)',
+              fontWeight: 600,
+            }}
+          >
+            Filter
+          </button>
+          {(filters.q || filters.action || filters.targetType || filters.from || filters.to) && (
+            <a href="/audit" style={{ alignSelf: 'center', fontSize: 12.5, color: 'var(--accent)' }}>
+              Clear
+            </a>
+          )}
+        </form>
+      </Card>
 
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 24, fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', color: 'var(--ink-faint)', fontSize: 11 }}>
-            <th>When</th><th>Actor</th><th>Action</th><th>Target</th><th>Detail</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.id} style={{ borderTop: '1px solid var(--line)' }}>
-              <td style={{ padding: '8px 0', color: 'var(--ink-faint)', whiteSpace: 'nowrap' }}>
-                {new Date(r.at).toLocaleString()}
-              </td>
-              <td style={{ color: 'var(--ink-dim)' }}>{r.actor.slice(0, 8)}</td>
-              <td style={{ color: 'var(--ink)' }}>{r.action}</td>
-              <td style={{ color: 'var(--ink-dim)' }}>{r.target_type}:{r.target_id.slice(0, 8)}</td>
-              <td style={{ color: 'var(--ink-faint)', maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {JSON.stringify(r.metadata)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div style={{ overflowX: 'auto' }}>
+        <DataTable
+          columns={[
+            {
+              key: 'when',
+              header: 'When',
+              render: (r) => (
+                <span style={{ color: 'var(--ink-faint)', whiteSpace: 'nowrap', fontSize: 12.5 }}>
+                  {new Date(r.at).toLocaleString()}
+                </span>
+              ),
+            },
+            { key: 'actor', header: 'Actor', render: (r) => <code style={{ fontSize: 12 }}>{r.actor.slice(0, 8)}</code> },
+            { key: 'action', header: 'Action', render: (r) => <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{r.action}</span> },
+            {
+              key: 'target',
+              header: 'Target',
+              render: (r) => <span style={{ color: 'var(--ink-dim)', fontSize: 12.5 }}>{r.target_type}:{r.target_id.slice(0, 8)}</span>,
+            },
+            {
+              key: 'detail',
+              header: 'Detail',
+              render: (r) => (
+                <span style={{ color: 'var(--ink-faint)', fontSize: 12.5, display: 'block', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320, overflow: 'hidden' }}>
+                  {JSON.stringify(r.metadata)}
+                </span>
+              ),
+            },
+          ]}
+          rows={rows}
+          empty={<p style={{ color: 'var(--ink-faint)', fontSize: 13, textAlign: 'center', margin: 0 }}>No events match these filters.</p>}
+        />
+      </div>
     </main>
   );
 }
