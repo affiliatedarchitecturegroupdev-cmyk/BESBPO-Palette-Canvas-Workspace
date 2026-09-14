@@ -57,7 +57,8 @@ async function api(base: string, path: string, opts: ApiOptions = {}) {
   } catch {
     json = text;
   }
-  return { status: res.status, json };
+  const setCookie = res.headers.getSetCookie?.() ?? [res.headers.get('set-cookie')].filter(Boolean);
+  return { status: res.status, json, headers: { ...Object.fromEntries(res.headers), 'set-cookie': setCookie } };
 }
 
 async function main() {
@@ -76,7 +77,7 @@ async function main() {
       rate_card, rate_card_entry, estimate, estimate_line,
       asset, job, automation_rule, automation_run, ai_action,
       legal_hold, permission_review, role_capability_override,
-      api_key, esign_envelope
+      api_key, esign_envelope, session, email_outbox
     CASCADE
   `);
 
@@ -1230,6 +1231,130 @@ async function main() {
     check('client cannot read deep-dive (403)', deepForbidden.status === 403);
     const acctForbidden = await api(base, '/reports/account-health', { email: 'client@test.example' });
     check('client cannot read account health (403)', acctForbidden.status === 403);
+
+    console.log('e2e: authN core + sign-up/bootstrap (A-01)');
+    // B-1: signup creates org + owner (agency_admin) + starter templates.
+    const signup = await api(base, '/auth/signup', {
+      method: 'POST',
+      body: {
+        slug: 'design-studio',
+        orgName: 'Design Studio',
+        ownerName: 'Ada Signup',
+        ownerEmail: 'ada@signup.example',
+        password: 'correct-horse-9',
+        confirmPassword: 'correct-horse-9',
+      },
+    });
+    check('signup creates org (201)', signup.status === 201);
+    const signupJson = signup.json as { org?: { slug?: string }; person?: { email?: string } };
+    check('signup returns org slug', signupJson.org?.slug === 'design-studio');
+    check('signup returns owner person', signupJson.person?.email === 'ada@signup.example');
+    const orgRows = await pool.query<{ status: string; plan_tier: string; owner_person_id: string | null }>(
+      `SELECT status, plan_tier, owner_person_id FROM organisation WHERE slug = 'design-studio'`,
+    );
+    check('org seeded with trial status + free plan + owner', orgRows.rows.length === 1 &&
+      orgRows.rows[0].status === 'trial' && orgRows.rows[0].plan_tier === 'free' && !!orgRows.rows[0].owner_person_id);
+    const ownerBinding = await pool.query<{ role: string }>(
+      `SELECT rb.role FROM role_binding rb JOIN person p ON p.id = rb.person_id WHERE p.email = 'ada@signup.example'`,
+    );
+    check('owner has agency_admin role binding', ownerBinding.rows.length === 1 && ownerBinding.rows[0].role === 'agency_admin');
+    const signupOrgId = (await pool.query<{ org_id: string }>(`SELECT org_id FROM person WHERE email = 'ada@signup.example'`)).rows[0].org_id;
+    const starterTemplates = await pool.query<{ key: string }>(
+      `SELECT key FROM service_template WHERE org_id = $1 ORDER BY key`,
+      [signupOrgId],
+    );
+    check('starter template pack seeded', starterTemplates.rows.length === 2 && starterTemplates.rows.some((t) => t.key === 'brand_identity'));
+    const outbox = await pool.query<{ kind: string; token_hash: string | null }>(
+      `SELECT kind, token_hash FROM email_outbox WHERE recipient = 'ada@signup.example'`,
+    );
+    check('verification outbox row created', outbox.rows.length === 1 && outbox.rows[0].kind === 'signup.verify');
+    // A-01: duplicate email and duplicate slug are both rejected.
+    const dupEmail = await api(base, '/auth/signup', {
+      method: 'POST',
+      body: { slug: 'other-studio', orgName: 'Other', ownerName: 'X', ownerEmail: 'ada@signup.example', password: 'correct-horse-9', confirmPassword: 'correct-horse-9' },
+    });
+    check('duplicate email rejected (409)', dupEmail.status === 409);
+    const dupSlug = await api(base, '/auth/signup', {
+      method: 'POST',
+      body: { slug: 'design-studio', orgName: 'Other', ownerName: 'Y', ownerEmail: 'other@signup.example', password: 'correct-horse-9', confirmPassword: 'correct-horse-9' },
+    });
+    check('duplicate slug rejected (409)', dupSlug.status === 409);
+    const badEmail = await api(base, '/auth/signup', {
+      method: 'POST',
+      body: { slug: 'bad', orgName: 'Bad', ownerName: 'Z', ownerEmail: 'not-an-email', password: 'correct-horse-9', confirmPassword: 'correct-horse-9' },
+    });
+    check('bad email rejected (422-class 400)', badEmail.status === 400);
+    const weakPassword = await api(base, '/auth/signup', {
+      method: 'POST',
+      body: { slug: 'weak', orgName: 'Weak', ownerName: 'W', ownerEmail: 'weak@signup.example', password: 'short', confirmPassword: 'short' },
+    });
+    check('weak password rejected (400)', weakPassword.status === 400);
+    // No plaintext password at rest (argon2id hash).
+    const storedHash = await pool.query<{ password_hash: string | null }>(
+      `SELECT password_hash FROM person WHERE email = 'ada@signup.example'`,
+    );
+    check('password stored as argon2id hash', !!storedHash.rows[0].password_hash &&
+      storedHash.rows[0].password_hash!.startsWith('$argon2id$') && !storedHash.rows[0].password_hash!.includes('correct-horse-9'));
+
+    // AuthN core: verify token → login → session → logout.
+    const rawVerifyToken = 'test-verify-token-does-not-exist';
+    const authVerify = await api(base, '/auth/verify', { method: 'POST', body: { token: rawVerifyToken } });
+    check('wrong verification token rejected (401)', authVerify.status === 401);
+
+    // Grab the real verification token from the outbox body.
+    const outboxBody = await pool.query<{ body: string | null }>(
+      `SELECT body FROM email_outbox WHERE recipient = 'ada@signup.example'`,
+    );
+    const realToken = outboxBody.rows[0].body!.replace('Verify: ', '');
+    const verifyOk = await api(base, '/auth/verify', { method: 'POST', body: { token: realToken } });
+    check('verification token flips verified (200)', verifyOk.status === 200);
+    const verifiedAt = await pool.query<{ verified_at: Date | null }>(
+      `SELECT verified_at FROM person WHERE email = 'ada@signup.example'`,
+    );
+    check('person.verified_at set', !!verifiedAt.rows[0].verified_at);
+    const verifyReuse = await api(base, '/auth/verify', { method: 'POST', body: { token: realToken } });
+    check('verification token single-use (401 on reuse)', verifyReuse.status === 401);
+
+    // Login: wrong password 401, correct password → session cookie.
+    const wrongLogin = await api(base, '/auth/login', { method: 'POST', body: { email: 'ada@signup.example', password: 'wrong-password-1' } });
+    check('wrong password rejected (401)', wrongLogin.status === 401);
+    const login = await api(base, '/auth/login', { method: 'POST', body: { email: 'ada@signup.example', password: 'correct-horse-9' } });
+    check('correct password logs in (201)', login.status === 201);
+    const setCookie = login.headers?.['set-cookie'] as unknown as string[] | undefined;
+    const cookieHeader = Array.isArray(setCookie) ? setCookie[0] : undefined;
+    check('login issues httpOnly session cookie', typeof cookieHeader === 'string' && cookieHeader.includes('pc_session=') && cookieHeader.includes('HttpOnly'));
+    const cookieStr = (cookieHeader ?? '').split(';')[0] ?? '';
+    const sessionCheck = await api(base, '/auth/session', { headers: { cookie: cookieStr } });
+    check('session resolves authenticated user', sessionCheck.status === 200 &&
+      (sessionCheck.json as { authenticated?: boolean }).authenticated === true);
+    const sessionJson = sessionCheck.json as { roles?: string[]; person?: { email?: string } };
+    check('session includes owner role + identity', sessionJson.roles?.includes('agency_admin') && sessionJson.person?.email === 'ada@signup.example');
+
+    // Logout revokes the session server-side.
+    const logout = await api(base, '/auth/logout', { method: 'POST', headers: { cookie: cookieStr } });
+    check('logout succeeds (201)', logout.status === 201);
+    const sessionAfterLogout = await api(base, '/auth/session', { headers: { cookie: cookieStr } });
+    check('revoked session no longer authenticates', (sessionAfterLogout.json as { authenticated?: boolean }).authenticated !== true);
+    const sessionRow = await pool.query<{ status: string }>(
+      `SELECT status FROM session WHERE person_id = (SELECT id FROM person WHERE email = 'ada@signup.example') ORDER BY created_at DESC LIMIT 1`,
+    );
+    check('session row marked revoked server-side', sessionRow.rows.length === 1 && sessionRow.rows[0].status === 'revoked');
+
+    // Merge master hash into session table then test expiry path.
+    await pool.query(`UPDATE session SET expires_at = now() - interval '1 minute' WHERE status = 'revoked'`);
+    const expiredCookieCheck = await api(base, '/auth/session', { headers: { cookie: cookieStr } });
+    check('expired session rejected', (expiredCookieCheck.json as { authenticated?: boolean }).authenticated !== true);
+
+    // Password hash being a raw argon2id also means the /identity/me dev path still resolves the new person.
+    const devIdentity = await api(base, '/identity/me', { email: 'ada@signup.example' });
+    check('existing dev-auth identity resolves new signup', devIdentity.status === 200);
+
+    // All auth events below are audited for the new org.
+    const authAudit = await pool.query<{ action: string }>(
+      `SELECT action FROM audit_event WHERE org_id = (SELECT org_id FROM person WHERE email = 'ada@signup.example') ORDER BY at`,
+    );
+    const authActions = authAudit.rows.map((r) => r.action);
+    check('auth lifecycle audited', authActions.includes('auth.signed_up') && authActions.includes('auth.logged_in') && authActions.includes('auth.logged_out'));
   } finally {
     await app.close();
     await pool.end();

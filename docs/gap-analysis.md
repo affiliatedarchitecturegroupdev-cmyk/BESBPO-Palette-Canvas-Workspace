@@ -3,9 +3,9 @@
 Snapshot date: 2026-09-14. Scope reference: 27-page planning document, module
 table in section 2. All capability statements in the PDF's roadmap table are
 treated as the target surface; this document marks what has been built and
-what is outstanding. Last refreshed after PR #18 (P8-01…P8-15) merged.
+what is outstanding. Last refreshed after A-01 (PR #20) merged.
 
-Current code footprint: **15,050 maintained LoC / 176 files**
+Current code footprint: **15,734 maintained LoC / 181 files**
 (`bash scripts/loc.sh`). PDF V1 estimate: **225,000–285,000 LoC**
 (includes tests + infrastructure + docs; excludes lockfiles/vendored deps).
 Current coverage is ~5% of the planned V1 surface.
@@ -22,7 +22,7 @@ Current coverage is ~5% of the planned V1 surface.
 | Capability | Status | What exists today | Gap |
 | --- | --- | --- | --- |
 | Email invitation | ✔ | P8-01 `/invitations` (invite/accept/revoke, token-based) | self-service UI; recovery/expiry policy on the token |
-| SSO-ready authentication | ◑ | OIDC metadata + SCIM provisioning (`/identity/sso`), header dev auth | real session auth; per PDF phase-5 hardening (annex **A-01…A-06**) |
+| SSO-ready authentication | ◑ | OIDC metadata + SCIM provisioning (`/identity/sso`), header dev auth, **real password authN (A-01): argon2id + httpOnly sessions + signup/login/logout at `/auth`** | enforcement across API routes, SSO/OIDC real dance (annex **A-02…A-06**) |
 | MFA support | ◑ | TOTP enrollment + verify (`/identity/mfa`) | policy enforcement + recovery codes (annex **A-05**) |
 | Organisation hierarchy | ◑ | single org per user, tenancy scoped | parent/child orgs, agency-to-client links |
 | Roles | ✔ | role_binding + capability map | fine-grained attributes per PDF §1 |

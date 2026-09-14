@@ -34,6 +34,11 @@ export class Database implements OnModuleDestroy {
     return rows.length ? rows[0] : null;
   }
 
+  /** Transactional write path (AuthService signup). Exposed for UoW commits. */
+  connect(): Promise<import('pg').PoolClient> {
+    return this.pool.connect();
+  }
+
   async onModuleDestroy() {
     await this.pool.end();
   }

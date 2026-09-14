@@ -81,6 +81,8 @@ import { RiskController } from './risk/risk.controller';
 import { RiskService } from './risk/risk.service';
 import { TemplateSchemasController } from './template-schemas/template-schemas.controller';
 import { TemplateSchemasService } from './template-schemas/template-schemas.service';
+import { AuthController } from './auth/auth.controller';
+import { AuthService } from './auth/auth.service';
 
 @Module({
   imports: [SecurityModule],
@@ -123,6 +125,7 @@ import { TemplateSchemasService } from './template-schemas/template-schemas.serv
     ExportsController,
     RiskController,
     TemplateSchemasController,
+    AuthController,
   ],
   providers: [
     Database,
@@ -167,6 +170,7 @@ import { TemplateSchemasService } from './template-schemas/template-schemas.serv
     ExportsService,
     RiskService,
     TemplateSchemasService,
+    AuthService,
   ],
 })
 export class AppModule implements NestModule {
