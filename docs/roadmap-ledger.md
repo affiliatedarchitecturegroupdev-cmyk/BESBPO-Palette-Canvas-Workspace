@@ -70,8 +70,45 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P8-13 | Risk fields on tasks | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `risk` module `risk_reason` kept |
 | P8-14 | Comment visibility tagging | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `comment.visibility` + controller role filter |
 | P8-15 | Service-template task-field schema | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `template-schemas` module |
+| A-01 | AuthN core + sign-up/org bootstrap | todo | — | — | schema: `organisation` upgrade, argon2id, httpOnly session, POST /auth/signup |
+| A-02 | Email verification + login/session | todo | — | — | depends A-01 + email transport (§0.2) |
+| A-03 | Password reset/change + revocation | todo | — | — | depends A-02 |
+| A-04 | Invite/member/roles admin | todo | — | — | supersedes P8-01 UI; depends A-02 |
+| A-05 | MFA policy enforcement + session hardening | todo | — | — | depends A-02 |
+| A-06 | Deactivation, export/delete, sessions manager, profile | todo | — | — | depends A-03 |
+| A-07 | Org/personal settings + email branding | todo | — | — | depends A-04 |
+| A-08 | Plan catalogue + trial assignment | todo | — | — | depends A-01 |
+| A-09 | Billing gateway, seats, dunning, billing UI | todo | — | — | depends A-08, §0.3 |
+| A-10 | Notification channels, digests, unsubscribe | todo | — | — | depends A-07, §0.2 |
+| A-11 | Onboarding wizard, template marketplace, demo, help | todo | — | — | depends A-04 |
+| A-12 | Public API versioning, importers, exporters | todo | — | — | depends P7-04 (keys), P8-11 |
+| A-13 | Webhook hardening, rate limits, retention enforcement, health/status | todo | — | — | depends §0.5, P6-11 |
+| A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | todo | — | — | depends P8-03..P8-06 |
+| A-15 | Mobile/PWA, whitelabel, widgets, L10N | todo | — | — | depends A-07, §9 |
+| A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | todo | — | — | continuous |
 
 ## Recently completed detail
+
+### P8-01…P8-15 — Collaboration & governance module set (2026-09-14)
+
+- Branch: `p8-collab-governance`, merged via PR #18 (`dd99648` + `3a5b83c`)
+- 15 modules wired into the API: invitations (token accept), confidentiality
+  tiers, scheduled recurrence, saved views, comment reactions, comment
+  attachments, message-to-task conversion, seq/parallel approval steps,
+  automated technical checks, QA reviewer assignment, export log, reporting
+  deep-dive, risk register (migration 008), comment visibility, service
+  template task-field schema (migration 008).
+- Determinism fix: disable the background queue poller in the e2e harness
+  (`PC_QUEUE_POLL=0`, explicit `/jobs/process` drives), and poll briefly for
+  the async automation evaluation + notification delivery. This eliminates
+  the timing flakes seen under load (previously surfaced as P6-11 DLQ /
+  P6-08 automation).
+- Gates: `npm run build` clean; e2e **212/212** stable (6+/6+ consecutive
+  runs, including under CPU load); shared permission tests pass;
+  `node scripts/drift-check.js` 0 findings.
+- Deferred: P8 has no web UI yet (API-only) — board columns for saved views,
+  recurrence, risk, export log, approval steps to land with the platform
+  annex (A-14 / A-04).
 
 ### P5-03 — Accessibility remediation (2026-08-23)
 
