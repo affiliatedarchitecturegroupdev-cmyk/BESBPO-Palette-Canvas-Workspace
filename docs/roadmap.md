@@ -68,9 +68,42 @@ Exit: **LoC ≥ 80k**, **e2e ≥ 200 checks**, integrations sandboxed.
 | 8.14 | Comment visibility tagging | comment.visibility (internal default), target-scoped enforcement | permission test: internal hidden |
 | 8.15 | Service-template task-field schema | service_template.task_field_schema JSONB for dynamic forms | e2e: schema round-trip |
 
-Exit: **e2e ≥ 320 checks** (delta 159 → next cap), migrations idempotent, LoC continues upward.
+Exit: **e2e ≥ 320 checks** (delta 159 → next cap), migrations idempotent, LoC
+continues upward.
 
+✅ **Complete 2026-09-14 (PR #18)** — all 8.01–8.15 API modules merged; e2e
+**212/212** stable on main. Web UI across the P8 surface (saved views board
+columns, recurrence, risk, export log, approval steps) lands with Phase 9
+annex slices (A-04 / A-14).
 
+## Phase 9 — platform foundation (PR #17 surface annex A-01…A-16)
+
+Next development phase after P8. Source of truth for the annex breakdown is
+`docs/gap-analysis-platform-surface.md`; acceptance criteria must always be
+re-validated against that document's diagnostics. Slice by heap-ordered,
+small PRs per AGENTS.md (each with e2e/permission evidence).
+
+| # | Scope | Depends on | Test shape |
+| --- | --- | --- | --- |
+| A-01 | AuthN core: `organisation` upgrade (slug/owner/trial), argon2id hashing, httpOnly sessions, `POST /auth/signup` bootstrap (org+owner+binding) | — | e2e: signup 201, duplicate 409, wrong password 401 |
+| A-02 | Email verification (single-use token) + login/logout/session + email transport outbox | A-01, §0.2 | e2e: verify, 410 reuse, session expiry; dev logs to outbox |
+| A-03 | Password reset/change + session revocation (audited) | A-02 | e2e: reset round-trip, expired token 410, old session 401 |
+| A-04 | Member invites/directory/roles admin (supersedes P8-01 UI) | A-02 | e2e: invite→accept→binding, revoke, admin-only 403 |
+| A-05 | MFA policy enforcement (required/optional) + recovery codes + session hardening | A-02 | e2e: policy enforced at login, single-use recovery |
+| A-06 | Deactivation, GDPR export/delete, device/session manager, profile | A-03 | e2e: deactivate blocks login; export contains own rows; delete purges |
+| A-07 | Org/personal settings + email branding | A-04 | e2e: settings CRUD + branding applied |
+| A-08 | Plan catalogue + trial assignment | A-01 | e2e: trial org provisioned; seat limits enforced |
+| A-09 | Billing gateway, seats, dunning, billing UI | A-08, §0.3 | e2e: checkout→webhook→subscription; dunning email |
+| A-10 | Notification channels (email/Slack/Teams), digests, unsubscribe | A-07, §0.2 | e2e: per-channel delivery + digest + opt-out |
+| A-11 | Onboarding wizard, template marketplace, demo org, help/docs | A-04 | snapshot + e2e: wizard completes |
+| A-12 | Public API versioning, importers, exporters | P7-04, P8-11 | e2e: versioned key call; import dry-run → apply |
+| A-13 | Webhook hardening, rate limits, retention enforcement | §0.5, P6-11 | e2e: HMAC verify, rate-limit 429, retention purge |
+| A-14 | Collaboration parity: timeline/Gantt, DnD board, subtasks, global search | P8-03…P8-06 | e2e + browser: board moves, highlight search |
+| A-15 | Mobile/PWA, whitelabel, widgets, L10N | A-07, §9 | snapshot + Lighthouse ≥ 90 mobile |
+| A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | continuous | CI: off-cycle drill, uptime monitors |
+
+Exit: **e2e ≥ 320 checks**, real session auth with password hashing verified
+in e2e, drift + CI gates green on every PR, LoC continues upward.
 
 ## Backlog (never complete but must be tracked)
 
