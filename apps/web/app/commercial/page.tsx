@@ -1,4 +1,5 @@
 import { budgetVsEffort, currentEmail, invoiceReady, projects, rateCards } from '@/lib/api';
+import { DataTable, EmptyState, PageHeader, StatCard } from '../components/ui';
 
 const money = (n: number | null) => (n === null ? '—' : `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`);
 
@@ -25,81 +26,103 @@ export default async function CommercialPage() {
     : (await Promise.all(projectList.map((p) => budgetVsEffort(email, p.id))))
         .filter((b): b is Exclude<typeof b, { error: string }> => !('error' in b));
 
+  const overBudget = budgets.filter((b) => (b.budget_amount ?? b.approved_amount) - b.logged_value < 0).length;
+
   return (
     <main>
-      <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>Commercial</h1>
-      <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginTop: 4 }}>
-        rate cards, budget vs effort, and invoice-ready milestones
-      </p>
+      <PageHeader
+        eyebrow="Capacity & delivery"
+        title="Commercial"
+        subtitle="Rate cards, budget vs effort, and invoice-ready milestones."
+      />
 
-      <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 18, marginTop: 32 }}>Rate cards</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', color: 'var(--ink-faint)', fontSize: 11 }}>
-            <th>Card</th><th>Currency</th><th>Entries</th>
-          </tr>
-        </thead>
-        <tbody>
-          {cards.map((c) => (
-            <tr key={c.id} style={{ borderTop: '1px solid var(--line)' }}>
-              <td style={{ padding: '10px 0', color: 'var(--ink)' }}>{c.name}</td>
-              <td>{c.currency}</td>
-              <td style={{ color: 'var(--ink-dim)' }}>
-                {c.entries.map((e) => `${e.role}${e.skill ? `/${e.skill}` : ''} $${Number(e.hourly_rate)}`).join(' · ')}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <section
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: 12,
+          marginBottom: 24,
+        }}
+      >
+        <StatCard label="Rate cards" value={cards.length} detail="currency terms" />
+        <StatCard label="Milestones" value={milestones.length} detail="invoice-ready" />
+        <StatCard
+          label="Over budget"
+          value={overBudget}
+          detail={overBudget > 0 ? 'needs attention' : 'all within'}
+          trend={overBudget > 0 ? 'warn' : 'up'}
+        />
+      </section>
 
-      <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 18, marginTop: 32 }}>Budget vs effort</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', color: 'var(--ink-faint)', fontSize: 11 }}>
-            <th>Project</th><th>PO</th><th>Budget</th><th>Approved est.</th><th>Logged h</th><th>Logged value</th><th>Variance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {budgets.map((b) => {
-            const variance = (b.budget_amount ?? b.approved_amount) - b.logged_value;
-            return (
-              <tr key={b.project_id} style={{ borderTop: '1px solid var(--line)' }}>
-                <td style={{ padding: '10px 0', color: 'var(--ink)' }}>{b.name}</td>
-                <td style={{ color: 'var(--ink-dim)' }}>{b.po_number ?? '—'}</td>
-                <td>{money(b.budget_amount)}</td>
-                <td>{money(b.approved_amount)}</td>
-                <td>{b.logged_hours.toFixed(1)}</td>
-                <td>{money(b.logged_value)}</td>
-                <td style={{ color: variance < 0 ? 'var(--accent)' : 'inherit' }}>{money(variance)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <ReportSection title="Rate cards">
+        <DataTable
+          columns={[
+            { key: 'card', header: 'Card', render: (c) => <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{c.name}</span> },
+            { key: 'currency', header: 'Currency', render: (c) => <span style={{ color: 'var(--ink-dim)' }}>{c.currency}</span> },
+            {
+              key: 'entries',
+              header: 'Entries',
+              render: (c) => (
+                <span style={{ fontSize: 12.5, color: 'var(--ink-dim)' }}>
+                  {c.entries.map((e) => `${e.role}${e.skill ? `/${e.skill}` : ''} $${Number(e.hourly_rate)}`).join(' · ')}
+                </span>
+              ),
+            },
+          ]}
+          rows={cards}
+          empty={<EmptyState title="No rate cards" />}
+        />
+      </ReportSection>
 
-      <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 18, marginTop: 32 }}>Invoice-ready milestones</h2>
-      {milestones.length === 0 ? (
-        <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginTop: 12 }}>No milestones flagged invoice-ready.</p>
-      ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 12, fontSize: 13 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: 'var(--ink-faint)', fontSize: 11 }}>
-              <th>Milestone</th><th>Project</th><th>PO</th><th>Amount</th><th>Target</th>
-            </tr>
-          </thead>
-          <tbody>
-            {milestones.map((m) => (
-              <tr key={m.id} style={{ borderTop: '1px solid var(--line)' }}>
-                <td style={{ padding: '10px 0', color: 'var(--ink)' }}>{m.name}</td>
-                <td style={{ color: 'var(--ink-dim)' }}>{m.project_name}</td>
-                <td style={{ color: 'var(--ink-dim)' }}>{m.po_number ?? '—'}</td>
-                <td>{m.invoice_amount === null ? '—' : money(Number(m.invoice_amount))}</td>
-                <td style={{ color: 'var(--ink-faint)' }}>{m.target_date ?? '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <ReportSection title="Budget vs effort">
+        <DataTable
+          columns={[
+            { key: 'project', header: 'Project', render: (b) => <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{b.name}</span> },
+            { key: 'po', header: 'PO', render: (b) => b.po_number ?? '—' },
+            { key: 'budget', header: 'Budget', render: (b) => money(b.budget_amount) },
+            { key: 'approved', header: 'Approved est.', render: (b) => money(b.approved_amount) },
+            { key: 'logged', header: 'Logged h', render: (b) => b.logged_hours.toFixed(1) },
+            { key: 'value', header: 'Logged value', render: (b) => money(b.logged_value) },
+            {
+              key: 'variance',
+              header: 'Variance',
+              render: (b) => {
+                const variance = (b.budget_amount ?? b.approved_amount) - b.logged_value;
+                return (
+                  <span style={{ color: variance < 0 ? 'var(--danger)' : 'var(--ink-dim)', fontWeight: variance < 0 ? 700 : 400 }}>
+                    {money(variance)}
+                  </span>
+                );
+              },
+            },
+          ]}
+          rows={budgets}
+          empty={<EmptyState title="No budget data" />}
+        />
+      </ReportSection>
+
+      <ReportSection title="Invoice-ready milestones">
+        <DataTable
+          columns={[
+            { key: 'milestone', header: 'Milestone', render: (m) => <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{m.name}</span> },
+            { key: 'project', header: 'Project', render: (m) => m.project_name },
+            { key: 'po', header: 'PO', render: (m) => m.po_number ?? '—' },
+            { key: 'amount', header: 'Amount', render: (m) => (m.invoice_amount === null ? '—' : money(Number(m.invoice_amount))) },
+            { key: 'target', header: 'Target', render: (m) => m.target_date ?? '—' },
+          ]}
+          rows={milestones}
+          empty={<EmptyState title="No invoice-ready milestones" body="Milestones flag here as soon as delivery gates clear." />}
+        />
+      </ReportSection>
     </main>
+  );
+}
+
+function ReportSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section style={{ margin: '28px 0' }}>
+      <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 18, margin: '0 0 12px' }}>{title}</h2>
+      {children}
+    </section>
   );
 }

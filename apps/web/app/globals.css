@@ -1,23 +1,299 @@
+/*
+ * Palette Canvas — Atelier Dark design system (frontend phase).
+ * Mirrors packages/design-tokens/src/index.ts. Brand anchor #1E1A2E.
+ */
+
 :root {
-  --ink: #f2ead9;
-  --ink-dim: #9a8f7c;
-  --ink-faint: #5f574a;
-  --paper: #16130f;
-  --paper-raise: #1e1a15;
-  --line: #2c2620;
-  --accent: #e4572e;
-  --accent-soft: #f3a712;
-  --status-intake: #5ca4d6;
-  --status-in-progress: #f3a712;
-  --status-done: #79c48d;
-  --serif: Georgia, serif;
-  --mono: 'IBM Plex Mono', monospace;
+  /* Brand surfaces — derived from the #1E1A2E company colour */
+  --brand-base: #1e1a2e;
+  --brand-raise: #26213a;
+  --brand-raise2: #2e2947;
+  --brand-deep: #131021;
+  --brand-deep2: #0d0b19;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  /* Ink (text) */
+  --ink: #f5f1e8;
+  --ink-dim: #b3ab97;
+  --ink-faint: #7d7592;
+  --ink-subtle: #554f6b;
+
+  /* Action */
+  --accent: #4f7dff;
+  --accent-hover: #6a92ff;
+  --accent-soft: rgba(79, 125, 255, 0.14);
+  --flare: #ff5e7a;
+  --flare-soft: rgba(255, 94, 122, 0.14);
+
+  /* Support */
+  --success: #43d9a3;
+  --success-soft: rgba(67, 217, 163, 0.14);
+  --warning: #f5b04c;
+  --warning-soft: rgba(245, 176, 76, 0.14);
+  --danger: #ff5470;
+  --danger-soft: rgba(255, 84, 112, 0.14);
+  --info: #59b7ff;
+  --info-soft: rgba(89, 183, 255, 0.14);
+
+  /* Status */
+  --status-intake: #59b7ff;
+  --status-qualified: #9e8cff;
+  --status-in-progress: #f5b04c;
+  --status-internal-qa: #59c2d1;
+  --status-proofing: #e8a03b;
+  --status-change-control: #ff7b4f;
+  --status-handover: #6ee7a7;
+  --status-done: #43d9a3;
+  --status-blocked: #ff5470;
+  --status-overdue: #ff5470;
+  --status-at-risk: #f5b04c;
+  --status-on-track: #43d9a3;
+
+  /* Visibility */
+  --vis-internal: #ff5e7a;
+  --vis-agency-shared: #59b7ff;
+  --vis-client-shared: #43d9a3;
+  --vis-restricted-third: #f5b04c;
+
+  /* Legacy aliases (Pages still reference paper/raise/accent names) */
+  --paper: var(--brand-deep);
+  --paper-raise: var(--brand-raise);
+  --paper-raise2: var(--brand-raise2);
+
+  /* Type — next/font variables injected on <html>; fallbacks for safety */
+  --serif: var(--font-serif, 'Fraunces'), Georgia, serif;
+  --mono: var(--font-mono, 'IBM Plex Mono'), 'SFMono-Regular', Consolas, monospace;
+  --sans: var(--font-sans, 'Manrope'), 'Avenir Next', 'Segoe UI', sans-serif;
+
+  /* Geometry */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --shadow-sm: 0 1px 2px rgba(10, 8, 20, 0.4);
+  --shadow-md: 0 8px 24px rgba(10, 8, 20, 0.45);
+  --shadow-lg: 0 24px 64px rgba(10, 8, 20, 0.6);
+
+  /* Layout metrics */
+  --app-header-h: 60px;
+  --sidebar-w: 264px;
+  --sidebar-w-collapsed: 72px;
 }
-* { box-sizing: border-box; }
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--brand-deep2);
+  scrollbar-color: var(--brand-raise2) var(--brand-deep);
+}
+
 body {
   margin: 0;
-  background: var(--paper);
+  background: var(--brand-deep);
   color: var(--ink);
   font-family: var(--mono);
   font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--brand-deep2);
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--serif);
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+a:hover {
+  color: var(--accent-hover);
+}
+
+button {
+  font-family: var(--sans);
+}
+
+code,
+pre {
+  font-family: var(--mono);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--brand-raise2);
+  border-radius: 999px;
+  border: 2px solid var(--brand-deep);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Subtle brand-gradient atmosphere behind the app shell */
+.atelier-bg {
+  background:
+    radial-gradient(1100px 520px at 85% -10%, rgba(79, 125, 255, 0.12), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(255, 94, 122, 0.08), transparent 55%),
+    var(--brand-deep);
+}
+
+/* Motion primitives */
+@keyframes pc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pc-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pc-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes pc-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(79, 125, 255, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(79, 125, 255, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(79, 125, 255, 0);
+  }
+}
+
+.pc-fade-up {
+  animation: pc-fade-up 360ms ease both;
+}
+.pc-scale-in {
+  animation: pc-scale-in 220ms ease both;
+}
+
+/* ---------- AppShell responsive behaviour ---------- */
+/* Desktop ≥1024px: show sidebar; hide mobile toolbar */
+@media (min-width: 1024px) {
+  .pc-toolbar {
+    display: none !important;
+  }
+  .pc-bell {
+    display: none !important;
+  }
+  .pc-collapse-btn {
+    display: grid !important;
+  }
+  .pc-sidebar {
+    display: block;
+  }
+}
+
+/* Mobile <1024px: hide sidebar, desktop primary nav, collapse trigger */
+@media (max-width: 1023px) {
+  .pc-sidebar {
+    display: none !important;
+  }
+  .pc-collapse-btn {
+    display: none !important;
+  }
+  nav[aria-label='Primary'] {
+    display: none !important;
+  }
+  .pc-bell {
+    display: grid !important;
+  }
+}
+
+/* Tight phones: shrink top bar padding + brand text */
+@media (max-width: 480px) {
+  header {
+    padding: 0 10px !important;
+  }
+  header a[aria-label='Palette Canvas home'] span:last-child {
+    font-size: 12px !important;
+    letter-spacing: 0.1em !important;
+  }
+}
+
+/* Grid-table → stacked cards on small screens (used by Workload/Capacity) */
+@media (max-width: 720px) {
+  .pc-table-head {
+    display: none !important;
+  }
+  .pc-table-row {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 6px 12px !important;
+    padding: 12px !important;
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius-sm) !important;
+    background: var(--brand-base) !important;
+    margin-bottom: 8px;
+  }
+  .pc-table-row > span:nth-child(3) {
+    text-align: left !important;
+  }
+  .pc-table-row > span:nth-child(4) {
+    text-align: left !important;
+  }
+  .pc-table-row > span:nth-child(5) {
+    grid-column: 1 / -1;
+  }
+  /* Capacity rows: name full width, then weekly/allocated, util/threshold, load full width */
+  .pc-row-capacity {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .pc-row-capacity > span:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+  .pc-row-capacity > span:nth-child(6) {
+    grid-column: 1 / -1;
+  }
+  .pc-row-capacity > span:nth-child(5) {
+    grid-column: auto !important;
+    text-align: left !important;
+  }
+  /* Skills rows: name full width, then pairs */
+  .pc-row-skills {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .pc-row-skills > span:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

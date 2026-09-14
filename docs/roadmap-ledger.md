@@ -86,6 +86,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | todo | — | — | depends P8-03..P8-06 |
 | A-15 | Mobile/PWA, whitelabel, widgets, L10N | todo | — | — | depends A-07, §9 |
 | A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | todo | — | — | continuous |
+| UI-01 | Web UI/UX advancement — scalable + mobile-first | done | PR #21 `c76d68c` | CI "Build + tests + gates" green on PR #21; root build exit 0; e2e 239/239; drift 0; LoC 18,039; browser QA on work-1 (dashboard, calendar, settings, help, reports, workload, capacity, commercial, projects, audit all render with seeded data); DataTable server-safe fix (no event handlers across AppShell client boundary) | new `/` dashboard (KPIs + intake attention + project pulse + dispatch), `/calendar` delivery timeline, `/settings` hub, `/help`; shared PageHeader/Badge/DataTable/StatCard/Card/ProgressBar/EmptyState; mobile-first CSS (stacked card rows, compact header, bottom quick-nav); `agentRules:false` |
 
 ## Recently completed detail
 
@@ -112,6 +113,30 @@ who (or which agent) did it, and what remains. For scope definitions see
   auth lifecycle audited); drift 0 findings.
 - Deferred to A-02: email transport (outbox exists, dev-log only), resend
   throttle, unverified-login enforcement is already wired for login.
+
+### UI-01 — Web UI/UX advancement: scalable + mobile-first (2026-09-14)
+
+- Directive: advance the web interface UI/UX — scalable and mobile-first,
+  better organized, more pages. Implemented on top of `main` (after PR #19/#20).
+- New `/` dashboard: KPI StatCards (intake backlog, active projects, agencies,
+  unread), intake-attention panel, project-pulse panel, dispatch quick actions.
+- New `/calendar` page: delivery timeline across the portfolio (overdue banner,
+  upcoming due dates), added to Operate nav.
+- New `/settings` hub: identity card from `me`, plan summary, governance +
+  workspace links. New `/help` page: keyboard shortcuts, role guide, quick-start.
+- Shared component refactor: `PageHeader`, `Badge`, `StatCard`, `Card`,
+  `ProgressBar`, `EmptyState`, `DataTable` (generic `rowKey` + index fallback)
+  adopted across Projects, Intake, Workload, Capacity, Directory, Templates,
+  Account-health, Integrations, Library, Reports, Commercial, Audit,
+  Notifications, SSO.
+- Mobile-first CSS: grid tables stack to cards ≤720px, compact brand/header
+  ≤480px, bottom quick-nav; desktop table form retained.
+- Fix: `DataTable` no longer attaches row event handlers — server-component safe
+  across the AppShell client boundary (`/reports` was 500ing on
+  "Event handlers cannot be passed to Client Component props").
+- Gates: `npm run build` clean; e2e 239/239; browser QA on work-1 with seeded
+  `pc-pg` (dashboard/calendar/settings/help/reports/workload/capacity/
+  commercial/projects/audit all render). `next.config.js` sets `agentRules: false`.
 
 ### P8-01…P8-15 — Collaboration & governance module set (2026-09-14)
 

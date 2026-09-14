@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { currentEmail, projects } from '@/lib/api';
+import { Badge, DataTable, EmptyState, PageHeader } from '../components/ui';
 
 export default async function ProjectsPage() {
   const email = await currentEmail();
@@ -10,44 +11,70 @@ export default async function ProjectsPage() {
 
   return (
     <main>
-      <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, marginTop: 0 }}>Projects</h1>
-      <table style={{ width: '100%', marginTop: 20, borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ textAlign: 'left', color: 'var(--ink-faint)', fontSize: 12 }}>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Visibility</th>
-            <th>Created</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {res.map((p) => (
-            <tr key={p.id} style={{ borderTop: '1px solid var(--line)' }}>
-              <td style={{ padding: '10px 4px' }}>
-                <Link href={`/projects/${p.id}`} style={{ color: 'var(--ink)' }}>
-                  {p.name}
-                </Link>
-              </td>
-              <td style={{ fontSize: 13 }}>{p.status}</td>
-              <td style={{ fontSize: 13, color: 'var(--ink-dim)' }}>{p.visibility}</td>
-              <td style={{ fontSize: 13, color: 'var(--ink-dim)' }}>{p.created_at.slice(0, 10)}</td>
-              <td>
-                <Link href={`/projects/${p.id}`} style={{ color: 'var(--accent)', fontSize: 12 }}>
-                  home
-                </Link>
-              </td>
-            </tr>
-          ))}
-          {res.length === 0 && (
-            <tr>
-              <td colSpan={5} style={{ padding: 24, color: 'var(--ink-dim)', fontSize: 13 }}>
-                No projects yet — convert a qualified brief from intake.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+      <PageHeader
+        eyebrow="Portfolio"
+        title="Projects"
+        subtitle="Every service order flowing through the production floor, from kickoff to handover."
+        actions={
+          <Link
+            href="/intake/new"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'var(--accent)',
+              color: '#fff',
+              fontFamily: 'var(--sans)',
+              fontWeight: 600,
+              fontSize: 13.5,
+              padding: '9px 16px',
+              borderRadius: 'var(--radius-md)',
+              textDecoration: 'none',
+            }}
+          >
+            New from brief
+          </Link>
+        }
+      />
+      <DataTable
+        columns={[
+          {
+            key: 'name',
+            header: 'Name',
+            render: (p) => (
+              <Link href={`/projects/${p.id}`} style={{ color: 'var(--ink)', fontWeight: 600 }}>
+                {p.name}
+              </Link>
+            ),
+          },
+          {
+            key: 'status',
+            header: 'Status',
+            render: (p) => <Badge status={p.status}>{p.status}</Badge>,
+          },
+          {
+            key: 'visibility',
+            header: 'Visibility',
+            render: (p) => <span style={{ color: 'var(--ink-faint)', fontSize: 12.5 }}>{p.visibility}</span>,
+          },
+          {
+            key: 'created',
+            header: 'Created',
+            render: (p) => <span style={{ color: 'var(--ink-faint)', fontSize: 12.5 }}>{p.created_at.slice(0, 10)}</span>,
+          },
+          {
+            key: 'link',
+            header: '',
+            render: (p) => (
+              <Link href={`/projects/${p.id}`} style={{ color: 'var(--accent)', fontSize: 12 }}>
+                open →
+              </Link>
+            ),
+          },
+        ]}
+        rows={res}
+        empty={<EmptyState title="No projects yet" body="Convert a qualified brief from the intake inbox to start one." />}
+      />
     </main>
   );
 }

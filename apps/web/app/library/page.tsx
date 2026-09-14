@@ -1,9 +1,12 @@
 import Link from 'next/link';
 import { currentEmail } from '@/lib/api';
+import { Card, PageHeader } from '../components/ui';
 
 const packs = [
   {
     title: 'Guidelines',
+    icon: '✎',
+    tone: 'var(--accent)',
     body: 'Service templates and triage guidance — the standard ways work enters the studio.',
     links: [
       { href: '/templates', label: 'Service templates' },
@@ -12,6 +15,8 @@ const packs = [
   },
   {
     title: 'Briefs',
+    icon: '✉',
+    tone: 'var(--info)',
     body: 'Client briefs and their conversion into governed projects.',
     links: [
       { href: '/intake', label: 'Brief inbox' },
@@ -20,6 +25,8 @@ const packs = [
   },
   {
     title: 'QA packs',
+    icon: '✓',
+    tone: 'var(--success)',
     body: 'Proofing workflows, version QA checklists, and approval gates before anything reaches a client.',
     links: [
       { href: '/projects', label: 'Project boards' },
@@ -28,6 +35,8 @@ const packs = [
   },
   {
     title: 'Handover packs',
+    icon: '→',
+    tone: 'var(--flare)',
     body: 'Delivery handover, commercial records, and the audit trail behind them.',
     links: [
       { href: '/commercial', label: 'Commercial records' },
@@ -44,23 +53,52 @@ export default async function LibraryPage() {
   }
   return (
     <main>
-      <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>Knowledge library</h1>
-      <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginTop: 4 }}>
-        the studio's operating knowledge — guidelines, briefs, QA and handover packs
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16, marginTop: 24 }}>
+      <PageHeader
+        eyebrow="Govern"
+        title="Knowledge library"
+        subtitle="The studio's operating knowledge — guidelines, briefs, QA and handover packs."
+      />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
         {packs.map((p) => (
-          <section key={p.title} style={{ border: '1px solid var(--line)', borderRadius: 8, padding: 16 }}>
-            <h2 style={{ fontSize: 15, margin: 0 }}>{p.title}</h2>
-            <p style={{ fontSize: 13, color: 'var(--ink-dim)' }}>{p.body}</p>
-            <ul style={{ margin: 0, paddingLeft: 16, fontSize: 13 }}>
+          <Card
+            key={p.title}
+            style={{
+              padding: 20,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              borderTop: `3px solid ${p.tone}`,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span
+                aria-hidden
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 'var(--radius-sm)',
+                  background: `${p.tone}1f`,
+                  color: p.tone,
+                  display: 'grid',
+                  placeItems: 'center',
+                  fontSize: 16,
+                }}
+              >
+                {p.icon}
+              </span>
+              <h2 style={{ fontFamily: 'var(--serif)', fontWeight: 600, margin: 0, fontSize: 17 }}>{p.title}</h2>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--ink-dim)', margin: 0, lineHeight: 1.5 }}>{p.body}</p>
+            <ul style={{ listStyle: 'none', margin: 'auto 0 0', padding: 0, fontSize: 13, display: 'grid', gap: 4 }}>
               {p.links.map((l) => (
                 <li key={l.href + l.label}>
-                  <Link href={l.href}>{l.label}</Link>
+                  <Link href={l.href} style={{ color: 'var(--accent)' }}>
+                    {l.label} →
+                  </Link>
                 </li>
               ))}
             </ul>
-          </section>
+          </Card>
         ))}
       </div>
     </main>

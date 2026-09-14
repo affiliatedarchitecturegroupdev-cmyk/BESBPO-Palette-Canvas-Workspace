@@ -1,4 +1,5 @@
 import { currentEmail, integrations } from '@/lib/api';
+import { Badge, Card, DataTable, EmptyState, PageHeader } from '../components/ui';
 
 /** P6-04: integrations hub — outbound webhook subscriptions. */
 export default async function IntegrationsPage() {
@@ -17,38 +18,32 @@ export default async function IntegrationsPage() {
 
   return (
     <main>
-      <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>Integrations</h1>
-      <p style={{ fontSize: 13, color: 'var(--ink-faint)', marginTop: 4 }}>
-        outbound webhook subscriptions; delivery is fire-and-forget with an HMAC-SHA256 signature
-        (<code>x-palette-signature</code>). Durable retries + DLQ arrive with the worker queue (P6-11).
-      </p>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 24, fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', color: 'var(--ink-faint)', fontSize: 11 }}>
-            <th>Name</th><th>Event</th><th>Target</th><th>State</th><th>Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map((i) => (
-            <tr key={i.id} style={{ borderTop: '1px solid var(--line)' }}>
-              <td style={{ padding: '10px 0', color: 'var(--ink)' }}>{i.name}</td>
-              <td><code style={{ fontSize: 12 }}>{i.event}</code></td>
-              <td style={{ color: 'var(--ink-dim)', wordBreak: 'break-all' }}>{i.target_url}</td>
-              <td style={{ color: i.active ? 'var(--ink)' : 'var(--ink-faint)' }}>
-                {i.active ? 'active' : 'paused'}
-              </td>
-              <td style={{ color: 'var(--ink-faint)' }}>{i.created_at.slice(0, 10)}</td>
-            </tr>
-          ))}
-          {list.length === 0 && (
-            <tr><td colSpan={5} style={{ padding: '20px 0', color: 'var(--ink-faint)' }}>No integrations yet.</td></tr>
-          )}
-        </tbody>
-      </table>
-      <p style={{ fontSize: 12, color: 'var(--ink-faint)', marginTop: 20 }}>
-        Create or toggle subscriptions via <code>POST /integrations</code> and <code>PATCH /integrations/:id</code>
-        (integrations.write capability).
-      </p>
+      <PageHeader
+        eyebrow="Connect"
+        title="Integrations"
+        subtitle="Outbound webhook subscriptions. Delivery is fire-and-forget with an HMAC-SHA256 signature (x-palette-signature)."
+      />
+      <DataTable
+        columns={[
+          { key: 'name', header: 'Name', render: (i) => <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{i.name}</span> },
+          { key: 'event', header: 'Event', render: (i) => <code style={{ fontSize: 12 }}>{i.event}</code> },
+          { key: 'target', header: 'Target', render: (i) => <span style={{ wordBreak: 'break-all', fontSize: 12.5 }}>{i.target_url}</span> },
+          {
+            key: 'state',
+            header: 'State',
+            render: (i) => (i.active ? <Badge status="done">active</Badge> : <Badge status="draft">paused</Badge>),
+          },
+          { key: 'created', header: 'Created', render: (i) => <span style={{ color: 'var(--ink-faint)' }}>{i.created_at.slice(0, 10)}</span> },
+        ]}
+        rows={list}
+        empty={<EmptyState title="No integrations yet" body="Outbound webhook subscriptions to Slack, email and custom endpoints will appear here." />}
+      />
+      <Card style={{ padding: 14, marginTop: 16 }}>
+        <p style={{ fontSize: 12, color: 'var(--ink-faint)', margin: 0 }}>
+          Create or toggle subscriptions via <code>POST /integrations</code> and <code>PATCH /integrations/:id</code>{' '}
+          (integrations.write capability).
+        </p>
+      </Card>
     </main>
   );
 }

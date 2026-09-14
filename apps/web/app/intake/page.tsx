@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { currentEmail, inbox, templates } from '@/lib/api';
+import { Badge, DataTable, EmptyState, PageHeader } from '../components/ui';
 
 export default async function IntakePage() {
   const email = await currentEmail();
@@ -7,70 +8,97 @@ export default async function IntakePage() {
   const tplRes = await templates(email);
   const tpls = Array.isArray(tplRes) ? tplRes : [];
 
+  if ('error' in res) {
+    return (
+      <main>
+        <PageHeader eyebrow="Intake" title="Intake inbox" />
+        <p style={{ color: 'var(--danger)' }}>
+          {res.error === 'not signed in' ? 'Select a user to view intake.' : `API error: ${res.error}`}
+        </p>
+      </main>
+    );
+  }
+
   return (
     <main>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <h1 style={{ fontFamily: 'var(--serif)', fontWeight: 500, margin: 0 }}>Intake inbox</h1>
-        <Link href="/intake/new" style={{ color: 'var(--accent)', fontSize: 13 }}>
-          New brief →
-        </Link>
-      </div>
-      {'error' in res ? (
-        <p style={{ color: 'var(--accent)' }}>{res.error === 'not signed in' ? 'Select a user to view intake.' : `API error: ${res.error}`}</p>
-      ) : (
-        <table style={{ width: '100%', marginTop: 24, borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: 'var(--ink-faint)', fontSize: 12 }}>
-              <th style={{ padding: '8px 4px' }}>Title</th>
-              <th style={{ padding: '8px 4px' }}>Status</th>
-              <th style={{ padding: '8px 4px' }}>Template</th>
-              <th style={{ padding: '8px 4px' }}>Channel</th>
-              <th style={{ padding: '8px 4px' }}>Submitted</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {res.map((b) => (
-              <tr key={b.id} style={{ borderTop: '1px solid var(--line)' }}>
-                <td style={{ padding: '10px 4px' }}>
-                  <Link href={`/intake/${b.id}`} style={{ color: 'var(--ink)' }}>
-                    {b.title}
-                  </Link>
-                  {b.duplicate_of && (
-                    <span style={{ color: 'var(--accent)', fontSize: 11, marginLeft: 8 }}>
-                      duplicate flagged
-                    </span>
-                  )}
-                </td>
-                <td style={{ padding: '10px 4px', fontSize: 13 }}>{b.status}</td>
-                <td style={{ padding: '10px 4px', fontSize: 13, color: 'var(--ink-dim)' }}>
-                  {tpls.find((t) => t.id === b.template_id)?.name ?? '—'}
-                </td>
-                <td style={{ padding: '10px 4px', fontSize: 13, color: 'var(--ink-dim)' }}>
-                  {b.source_channel}
-                </td>
-                <td style={{ padding: '10px 4px', fontSize: 13, color: 'var(--ink-dim)' }}>
-                  {b.created_at.slice(0, 10)}
-                </td>
-                <td style={{ padding: '10px 4px' }}>
-                  {b.status === 'qualified' && (
-                    <Link href={`/intake/${b.id}`} style={{ color: 'var(--accent)', fontSize: 12 }}>
-                      open
-                    </Link>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {res.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{ padding: 24, color: 'var(--ink-dim)', fontSize: 13 }}>
-                  Inbox is empty.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      )}
+      <PageHeader
+        eyebrow="Intake"
+        title="Intake inbox"
+        subtitle="Every brief awaiting booking. Qualified briefs convert into projects."
+        actions={
+          <Link
+            href="/intake/new"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              background: 'var(--accent)',
+              color: '#fff',
+              fontFamily: 'var(--sans)',
+              fontWeight: 600,
+              fontSize: 13.5,
+              padding: '9px 16px',
+              borderRadius: 'var(--radius-md)',
+              textDecoration: 'none',
+            }}
+          >
+            + New brief
+          </Link>
+        }
+      />
+      <DataTable
+        columns={[
+          {
+            key: 'title',
+            header: 'Title',
+            render: (b) => (
+              <div>
+                <Link href={`/intake/${b.id}`} style={{ color: 'var(--ink)', fontWeight: 600 }}>
+                  {b.title}
+                </Link>
+                {b.duplicate_of && (
+                  <span style={{ color: 'var(--flare)', fontSize: 11, marginLeft: 8 }}>duplicate flagged</span>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: 'status',
+            header: 'Status',
+            render: (b) => <Badge status={b.status}>{b.status}</Badge>,
+          },
+          {
+            key: 'template',
+            header: 'Template',
+            render: (b) => (
+              <span style={{ color: 'var(--ink-faint)', fontSize: 12.5 }}>
+                {tpls.find((t) => t.id === b.template_id)?.name ?? '—'}
+              </span>
+            ),
+          },
+          {
+            key: 'channel',
+            header: 'Channel',
+            render: (b) => <span style={{ color: 'var(--ink-faint)', fontSize: 12.5 }}>{b.source_channel}</span>,
+          },
+          {
+            key: 'submitted',
+            header: 'Submitted',
+            render: (b) => <span style={{ color: 'var(--ink-faint)', fontSize: 12.5 }}>{b.created_at.slice(0, 10)}</span>,
+          },
+          {
+            key: 'link',
+            header: '',
+            render: (b) => (
+              <Link href={`/intake/${b.id}`} style={{ color: 'var(--accent)', fontSize: 12 }}>
+                open →
+              </Link>
+            ),
+          },
+        ]}
+        rows={res}
+        empty={<EmptyState title="Inbox is empty" body="New briefs from email, Slack and forms will queue here for triage." />}
+      />
     </main>
   );
 }
