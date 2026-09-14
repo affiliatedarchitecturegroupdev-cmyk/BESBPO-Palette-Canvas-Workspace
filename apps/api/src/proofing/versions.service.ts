@@ -7,11 +7,12 @@ export interface VersionRow {
   deliverable_id: string;
   version: number;
   label: string;
-  uri: string;
-  notes: string | null;
-  status: string;
-  created_by: string;
-  created_at: string;
+​   uri: string;
+​   notes: string | null;
+​   status: string;
+​   confidentiality: string;
+​   created_by: string;
+​   created_at: string;
 }
 
 export interface QaItemRow {
@@ -28,17 +29,32 @@ export interface QaItemRow {
 export class VersionsService {
   constructor(private readonly db: Database) {}
 
-  async list(orgId: string, deliverableId: string): Promise<VersionRow[]> {
+  async list(orgId: string, deliverableId: string, external = false): Promise<VersionRow[]> {
     const { rows } = await this.db.query<VersionRow>(
-      'SELECT id, deliverable_id, version, label, uri, notes, status, created_by, created_at FROM version WHERE org_id = $1 AND deliverable_id = $2 ORDER BY version',
+      `SELECT id, deliverable_id, version, label, uri, notes, status, confidentiality, created_by, created_at
+       FROM version WHERE org_id = $1 AND deliverable_id = $2
+       ${external ? "AND confidentiality <> 'internal'" : ''}
+       ORDER BY version`,
       [orgId, deliverableId],
     );
     return rows;
+
   }
+
+  /** P8-02 set a version's confidentiality tier (tiers.manage gate). */
+  async setConfidentiality(orgId: string, id: string, confidentiality: string): Promise<VersionRow> {
+    const row = await this.db.oneOrNull<VersionRow>(
+      `UPDATE version SET confidentiality = $3 WHERE org_id = $1 AND id = $2
+       RETURNING id, deliverable_id, version, label, uri, notes, status, confidentiality, created_by, created_at`,
+      [orgId, id, confidentiality],
+    );
+    if (!row) throw new NotFoundException('version not found');
+    return row;
+}
 
   private async mustGet(orgId: string, id: string): Promise<VersionRow> {
     const row = await this.db.oneOrNull<VersionRow>(
-      'SELECT id, deliverable_id, version, label, uri, notes, status, created_by, created_at FROM version WHERE org_id = $1 AND id = $2',
+      'SELECT id, deliverable_id, version, label, uri, notes, status, confidentiality, created_by, created_at FROM version WHERE org_id = $1 AND id = $2',
       [orgId, id],
     );
     if (!row) throw new NotFoundException('version not found');
@@ -54,7 +70,7 @@ export class VersionsService {
     return this.db.one<VersionRow>(
       `INSERT INTO version (id, org_id, deliverable_id, version, label, uri, notes, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-       RETURNING id, deliverable_id, version, label, uri, notes, status, created_by, created_at`,
+       RETURNING id, deliverable_id, version, label, uri, notes, status, confidentiality, created_by, created_at`,
       [randomUUID(), orgId, deliverableId, version, input.label, input.uri, input.notes ?? null, createdBy],
     );
   }
