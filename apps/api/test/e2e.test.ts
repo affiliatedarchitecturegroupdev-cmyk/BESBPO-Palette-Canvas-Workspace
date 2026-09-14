@@ -9,6 +9,11 @@ import { migrate } from '../src/db/migrate';
 import { DATABASE_URL, migrationsDir } from '../src/db/paths';
 import { totp } from '../src/identity/totp';
 
+// Drive the worker queue exclusively via POST /jobs/process below. The 2s
+// background poller otherwise races the explicit drains (backoff fast-forward
+// in P6-11, media inspections, reminder delivery), making e2e timing-flaky.
+process.env.PC_QUEUE_POLL = '0';
+
 /**
  * End-to-end flow test against a real Postgres instance:
  * intake → triage → conversion → project home, with permission negatives.
@@ -765,13 +770,29 @@ async function main() {
     // non-matching event first: move t2 to done was already done earlier; move t1 to in_progress matches
     const move = await api(base, `/tasks/${t1Id}`, { email: 'lead@test.example', method: 'PATCH', body: { status: 'in_progress' } });
     check('task moved to in_progress', move.status === 200);
-    const runs = await api(base, '/automations/runs', { email: 'ops@test.example' });
-    const runRows = runs.json as Array<{ matched: boolean; detail: { recipients?: number } }>;
+    // rule evaluation runs asynchronously off the in-process event bus; poll
+    // briefly so the assertion sees the matched run instead of racing it.
+    const matchedDeadline = Date.now() + 3000;
+    let runRows: Array<{ matched: boolean; detail: { recipients?: number } }> = [];
+    while (Date.now() < matchedDeadline) {
+      const runs = await api(base, '/automations/runs', { email: 'ops@test.example' });
+      runRows = runs.json as Array<{ matched: boolean; detail: { recipients?: number } }>;
+      if (runRows.some((r) => r.matched && (r.detail?.recipients ?? 0) >= 1)) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
     check('automation ran with matched condition', runRows.length >= 1 &&
       runRows.some((r) => r.matched && (r.detail?.recipients ?? 0) >= 1));
-    const autoInbox = await api(base, '/notifications', { email: 'lead@test.example' });
-    check('automation notification delivered', (autoInbox.json as { items: Array<{ message: string }> }).items
-      .some((n) => n.message.includes('started')));
+    // notification emission happens inside the same async evaluation — poll the
+    // inbox until the message lands.
+    const notifyDeadline = Date.now() + 3000;
+    let autoInboxItems: Array<{ message: string }> = [];
+    while (Date.now() < notifyDeadline) {
+      const autoInbox = await api(base, '/notifications', { email: 'lead@test.example' });
+      autoInboxItems = (autoInbox.json as { items: Array<{ message: string }> }).items;
+      if (autoInboxItems.some((n) => n.message.includes('started'))) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    check('automation notification delivered', autoInboxItems.some((n) => n.message.includes('started')));
 
     console.log('e2e: live updates over SSE (P6-09)');
     const sseAnon = await fetch(`${base}/events/stream`);
