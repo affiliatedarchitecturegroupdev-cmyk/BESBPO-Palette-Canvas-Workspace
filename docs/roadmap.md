@@ -85,7 +85,7 @@ small PRs per AGENTS.md (each with e2e/permission evidence).
 
 | # | Scope | Depends on | Test shape |
 | --- | --- | --- | --- |
-| A-01 | AuthN core: `organisation` upgrade (slug/owner/trial), argon2id hashing, httpOnly sessions, `POST /auth/signup` bootstrap (org+owner+binding) | — | e2e: signup 201, duplicate 409, wrong password 401 |
+| ~~A-01~~ ✅ | AuthN core: `organisation` upgrade (slug/owner/trial), argon2id hashing, httpOnly sessions, `POST /auth/signup` bootstrap (org+owner+binding) | — | e2e: signup 201, duplicate 409, wrong password 401 — **done PR #20** (e2e 239/239) |
 | A-02 | Email verification (single-use token) + login/logout/session + email transport outbox | A-01, §0.2 | e2e: verify, 410 reuse, session expiry; dev logs to outbox |
 | A-03 | Password reset/change + session revocation (audited) | A-02 | e2e: reset round-trip, expired token 410, old session 401 |
 | A-04 | Member invites/directory/roles admin (supersedes P8-01 UI) | A-02 | e2e: invite→accept→binding, revoke, admin-only 403 |

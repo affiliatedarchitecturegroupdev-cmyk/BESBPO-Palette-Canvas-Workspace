@@ -28,7 +28,7 @@ management, no CSP/CSRF, no scheduler/lib for recurring jobs, and no validation 
 
 | # | Service | Status | Today | Needed for | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 0.1 | AuthN core (password hashing + session/token) | ✘ | header auth `x-user-email`, cookie `pc_user_email` (plaintext email swither) | every §1–§9 credential flow | `argon2id`+ secure httpOnly cookie; fallback signed-state JWT for APIs |
+| 0.1 | AuthN core (password hashing + session/token) | ✔ | header auth `x-user-email`, plus `argon2id` hashing + httpOnly sessions + `/auth` (signup/login/logout/session) via **A-01 (PR #20)** | every §1–§9 credential flow | fallback signed-state JWT for APIs (A-02+) |
 | 0.2 | Email transport | ✘ | none | invites, verification, magic links, password reset, notifications, billing | provider abstraction (SMTP/Resend/SES); dev fallback logs to console |
 | 0.3 | Token/one-time-code primitives | ◑ | TOTP MFA (P7-01) | invites, email verification, magic links, password reset, API-key scopes | expire, single-use, hashed-at-rest; audit every issue/consume |
 | 0.4 | Web security/CSRF + CSP | ✘ | security headers (P5-04)) | session cookies, form posts, iframe-free admin | cookie-binding CSRF tokens; strict CSP on all pages |
@@ -46,10 +46,10 @@ email verification, recovery, deactivation/export/delete. This is the single lar
 
 | # | Feature | Status | Scope | Acceptance (e2e or test) |
 | --- | --- | --- | --- | --- |
-| 1.1 | Workspace/account model (upgrade `organisation` schema) | ✘ | `organisation`: id, slug, display_name, owner_person_id, plan_tier, trial_ends_at, status (active/suspended), default_timezone, default_locale; org-wide settings JSONB | create org → defaults seeded (roles, starter template pack), owner binding; slug uniqueness |
-| 1.2 | Sign-up / org bootstrap (first-run onboarding) | ✘ | POST /auth/signup captures name/email/password → creates org + owner (agency_admin); verification email; trial start | sign-up 201→ org+owner rows, owner role_binding; duplicate email 409; bad email 422 |
+| 1.1 | Workspace/account model (upgrade `organisation` schema) | ✔ (A-01 PR #20) | `organisation`: id, slug, display_name, owner_person_id, plan_tier, trial_ends_at, status (active/suspended), default_timezone, default_locale; org-wide settings JSONB | create org → defaults seeded (roles, starter template pack), owner binding; slug uniqueness |
+| 1.2 | Sign-up / org bootstrap (first-run onboarding) | ✔ (A-01 PR #20) | POST /auth/signup captures name/email/password → creates org + owner (agency_admin); verification email; trial start | sign-up 201→ org+owner rows, owner role_binding; duplicate email 409; bad email 422 |
 | 1.3 | Email verification | ✘ | 6-digit code or signed link; person.verified_at; resend throttle | unverified cannot log in (403`, verified flips person; wrong code 401; resend limit |
-| 1.4 | Login / logout (session) | ✘ | email+password → httpOnly session; remember-me (30d vs 8h); logout revokes | wrong password 401 uniform; concurrent sessions revoked on password change; logout invalidates |
+| 1.4 | Login / logout (session) | ◑ (A-01 core in PR #20) | email+password → httpOnly session; remember-me (30d vs 8h); logout revokes | wrong password 401 uniform; concurrent sessions revoked on password change; logout invalidates |
 | 1.5 | Password reset (self-service) | ✘ | request → email token (15m); reset form; reuse detection | reset works; token 1-use; expired token 410 |
 | 1.6 | Password change + session revocation | ✘ | require current password; revoke other sessions; audit | wrong current 400; old session 401 |
 | 1.7 | Account deactivation | ✘ | soft-delete, disables login, admin/owner can restore | deactivated cannot log in; restore re-enables |
@@ -208,7 +208,7 @@ The PDF roadmap (P1–P8) + backlog (B.*) remains the **feature spine**. This su
 ### Suggested roadmap annex (new IDs, ledger-tracked)
 | ID | Section | Title | Dependency |
 | --- | --- | --- | --- |
-| A-01 | §0.1+§1.1–1.2 | AuthN core + sign-up/org bootstrap | — |
+| **A-01 ✔** | §0.1+§1.1–1.2 | AuthN core + sign-up/org bootstrap | — |
 | A-02 | §1.3–1.4 | Email verification + login/session | A-01, §0.2 |
 | A-03 | §1.5–1.6 | Password reset/change + revocation | A-02 |
 | A-04 | §2.1–2.3 | Invite/member/roles admin (supercedes P8-01 UI) | A-02 |

@@ -19,6 +19,21 @@ export enum VisibilityLevel {
   RestrictedThirdParty = 'restricted_third_party',
 }
 
+/** Organisation account model (A-01 §1.1): plan tier + lifecycle status. */
+export enum PlanTier {
+  Free = 'free',
+  Starter = 'starter',
+  Pro = 'pro',
+  Enterprise = 'enterprise',
+}
+
+export enum OrgStatus {
+  Active = 'active',
+  Suspended = 'suspended',
+  Trial = 'trial',
+  Expired = 'expired',
+}
+
 /** Primary stakeholder roles (PDF section 1). */
 export enum Role {
   PlatformOwner = 'platform_owner',

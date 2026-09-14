@@ -70,7 +70,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P8-13 | Risk fields on tasks | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `risk` module `risk_reason` kept |
 | P8-14 | Comment visibility tagging | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `comment.visibility` + controller role filter |
 | P8-15 | Service-template task-field schema | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `template-schemas` module |
-| A-01 | AuthN core + sign-up/org bootstrap | todo | — | — | schema: `organisation` upgrade, argon2id, httpOnly session, POST /auth/signup |
+| A-01 | AuthN core + sign-up/org bootstrap | done | PR #20 | e2e 239/239 (27 new auth checks); root build clean; drift 0 findings | migration 009: `organisation` upgrade (slug/owner/plan/trial), argon2id via `@node-rs/argon2`, httpOnly sessions, `POST /auth/signup` + `/auth/verify` + `/auth/login` + `/auth/logout` + `/auth/session` |
 | A-02 | Email verification + login/session | todo | — | — | depends A-01 + email transport (§0.2) |
 | A-03 | Password reset/change + revocation | todo | — | — | depends A-02 |
 | A-04 | Invite/member/roles admin | todo | — | — | supersedes P8-01 UI; depends A-02 |
@@ -88,6 +88,30 @@ who (or which agent) did it, and what remains. For scope definitions see
 | A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | todo | — | — | continuous |
 
 ## Recently completed detail
+
+### A-01 — AuthN core + sign-up/org bootstrap (2026-09-14)
+
+- Branch: `b1-authn-signup`, PR #20 (on top of PR #19 CI/A-2 doc work)
+- Migration `009_phase9_auth.sql`: `organisation` account model upgrade
+  (slug unique, display_name, owner_person_id, plan_tier, status,
+  trial_ends_at, timezone, locale, settings JSONB), `person.password_hash` +
+  `verified_at` + `deactivated_at`, `session` (SHA-256 hashed tokens,
+  8h/30d expiry, remember-me), `email_outbox` (verification + future mail).
+- AuthN core: argon2id password hashing (`@node-rs/argon2`), httpOnly session
+  cookie, `POST /auth/signup` (org+owner+binding+starter templates in one
+  transaction), `POST /auth/verify` (single-use outbox token), `POST
+  /auth/login` (8h/30d), `POST /auth/logout` (server-side revoke), `GET
+  /auth/session`.
+- Owner role per §§1.1–1.2 is `agency_admin` bound at organisation scope;
+  signup seeds the two starter service templates (brand_identity,
+  social_retainer).
+- Gates: `npm run build` clean; e2e **239/239** (27 new authN checks:
+  signup 201, duplicate email 409, duplicate slug 409, bad email 400, weak
+  password 400, argon2id at rest, verify flips + single-use, wrong password
+  401, httpOnly cookie, session resolves, logout revokes, expiry rejected,
+  auth lifecycle audited); drift 0 findings.
+- Deferred to A-02: email transport (outbox exists, dev-log only), resend
+  throttle, unverified-login enforcement is already wired for login.
 
 ### P8-01…P8-15 — Collaboration & governance module set (2026-09-14)
 
