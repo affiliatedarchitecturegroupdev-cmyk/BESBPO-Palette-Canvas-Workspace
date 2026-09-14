@@ -86,7 +86,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | todo | — | — | depends P8-03..P8-06 |
 | A-15 | Mobile/PWA, whitelabel, widgets, L10N | todo | — | — | depends A-07, §9 |
 | A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | todo | — | — | continuous |
-| UI-01 | Web UI/UX advancement — scalable + mobile-first | done | PR #21 (pending) | `next build` clean; root build exit 0; e2e 239/239; browser QA on work-1 (dashboard, calendar, settings, help, reports, workload, capacity, commercial, projects, audit all render with seeded data); DataTable server-safe fix (no event handlers across AppShell client boundary) | new `/` dashboard (KPIs + intake attention + project pulse + dispatch), `/calendar` delivery timeline, `/settings` hub, `/help`; shared PageHeader/Badge/DataTable/StatCard/Card/ProgressBar/EmptyState; mobile-first CSS (stacked card rows, compact header, bottom quick-nav); `agentRules:false` |
+| UI-01 | Web UI/UX advancement — scalable + mobile-first | done | PR #21 `c76d68c` | CI "Build + tests + gates" green on PR #21; root build exit 0; e2e 239/239; drift 0; LoC 18,039; browser QA on work-1 (dashboard, calendar, settings, help, reports, workload, capacity, commercial, projects, audit all render with seeded data); DataTable server-safe fix (no event handlers across AppShell client boundary) | new `/` dashboard (KPIs + intake attention + project pulse + dispatch), `/calendar` delivery timeline, `/settings` hub, `/help`; shared PageHeader/Badge/DataTable/StatCard/Card/ProgressBar/EmptyState; mobile-first CSS (stacked card rows, compact header, bottom quick-nav); `agentRules:false` |
 
 ## Recently completed detail
 
