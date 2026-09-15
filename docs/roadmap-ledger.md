@@ -514,8 +514,8 @@ on the server, which would be a security bug, not a UI bug.
 
 | Gate | Target | Actual | Status |
 | --- | --- | --- | --- |
-| LoC | ≥ 80k (Phase 6 exit) | ~24.5k | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new |
-| e2e | ≥ 320 checks | 354 | met |
+| LoC | ≥ 80k (Phase 6 exit) | ~37.6k (ts/tsx/sql/sh/js, excl. build dirs) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate |
+| e2e | ≥ 320 checks | 374 (N2.2) | met |
 | Permission tests | pass | pass | met |
 | Drift | 0 findings | 0 | met |
 
