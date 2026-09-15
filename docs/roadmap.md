@@ -105,6 +105,13 @@ small PRs per AGENTS.md (each with e2e/permission evidence).
 Exit: **e2e ≥ 320 checks**, real session auth with password hashing verified
 in e2e, drift + CI gates green on every PR, LoC continues upward.
 
+**Status:** A-01 done (PR #20). V2 Phases 1-6 done (PR #22) and Phase 6
+corrected (SPA rows, PR #24). A-02…A-16 **not started**; the next slices are
+scoped in `docs/roadmap-ledger.md` → "Next phases" (N1→N3), ordered by what
+unblocks the most downstream work rather than by id. The single keystone unblock
+is the email transport decision (§0.2), which releases A-02→A-03→A-04→A-05→A-10.
+The A-block's scope is unchanged; only its ordering is newly stated.
+
 ## Backlog (never complete but must be tracked)
 
 | # | Scope | Exit criteria | Tests |

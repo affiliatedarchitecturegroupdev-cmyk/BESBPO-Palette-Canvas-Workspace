@@ -1,0 +1,9 @@
+<svg viewBox="0 0 340 70" xmlns="http://www.w3.org/2000/svg">
+  <rect x="5" y="5" width="60" height="60" rx="14" fill="#131021"/>
+  <circle cx="25" cy="25" r="6" fill="#7876e0"/>
+  <circle cx="45" cy="25" r="6" fill="#9471cb"/>
+  <circle cx="25" cy="45" r="6" fill="#cd67a0"/>
+  <circle cx="45" cy="45" r="6" fill="#d66599"/>
+  <circle cx="35" cy="35" r="5" fill="#4f7dff"/>
+  <text x="82" y="44" font-family="Poppins, sans-serif" font-weight="700" font-size="26" fill="#131021">PALETTE CANVAS</text>
+</svg>

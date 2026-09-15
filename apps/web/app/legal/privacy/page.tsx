@@ -1,85 +1,91 @@
 import { LegalPage, Clause, Callout } from '../LegalPage';
+import { SUPPORT_EMAIL } from '../contact';
 
-export const metadata = { title: 'Privacy notice — Palette Canvas' };
+export const metadata = { title: 'Privacy policy — Palette Canvas' };
 
 export default function PrivacyPage() {
   return (
     <LegalPage
-      title="Privacy notice"
-      updated="14 September 2026"
-      intro="What personal data the workspace holds, why, where it is kept, and what you can ask us to do with it."
+      title="Privacy policy"
+      intro="What this platform actually collects, why, where it is kept, and what you can ask us to do with it."
     >
       <Callout>
-        Draft notice. The data locations and sub-processor list below describe the intended production deployment, not every
-        development environment. Confirm the final wording with our data protection lead before publication.
+        <strong>Drafted content.</strong> Consistent with the &ldquo;pending qualified legal review&rdquo; framing used elsewhere
+        in Palette Canvas&apos;s documentation, this is not yet confirmed as final. See the note on UK data in section 3.
       </Callout>
 
-      <Clause heading="1. Who is responsible">
-        <p>
-          Palette Canvas Ltd is the data controller for the personal data held in your workspace. Where your organisation is the
-          controller of its own client data, we act as a processor on its instructions.
-        </p>
-      </Clause>
-
-      <Clause heading="2. What we hold">
+      <Clause heading="1. What this platform actually collects">
+        <p>Grounded in what the platform&apos;s real architecture processes, not a generic list:</p>
         <ul style={{ paddingLeft: 20, margin: 0, display: 'grid', gap: 6 }}>
-          <li>Account data: name, work email, role, and role bindings that determine what you can see.</li>
-          <li>Authentication data: session identity, multi-factor enrolment, and API keys you issue (stored hashed).</li>
-          <li>Delivery records: projects, tasks, comments, versions, approvals and handover packs you create.</li>
-          <li>Activity data: audit events recording who did what and when, including the agent tag on automated actions.</li>
-          <li>Media: files you upload, their versions, and the derived metadata we record when inspecting them.</li>
+          <li>
+            <strong>Account and identity data</strong> — name, email, role, and employment or engagement attributes, managed
+            through the platform&apos;s identity provider.
+          </li>
+          <li>
+            <strong>Content you create</strong> — boards, items, briefs, messages, comments, and files you or your organisation
+            upload or create within the platform.
+          </li>
+          <li>
+            <strong>Usage and activity data</strong> — the platform&apos;s audit log, and dashboard metrics derived from your own
+            activity.
+          </li>
+          <li>
+            <strong>Third-party integration data</strong> — if you connect Adobe, Canva or Dropbox, the platform stores the
+            authorisation needed to maintain that connection. If you use the research or asset-sourcing AI agents, your queries to
+            those tools are logged for the same auditability reasons as everything else on this platform.
+          </li>
         </ul>
       </Clause>
 
-      <Clause heading="3. Why we hold it">
+      <Clause heading="2. What we do not do">
+        <ul style={{ paddingLeft: 20, margin: 0, display: 'grid', gap: 6 }}>
+          <li>We do not sell your data.</li>
+          <li>
+            We do not use your engagement content to train any AI model — the platform&apos;s AI agents operate on your data to
+            assist your work, not to learn from it for use elsewhere.
+          </li>
+          <li>
+            We do not grant Palette Canvas staff visibility into a Partner Agency&apos;s internal-only channels — that boundary is
+            enforced at the database level, not just described here.
+          </li>
+        </ul>
+      </Clause>
+
+      <Clause heading="3. Data residency">
         <p>
-          To operate the service you have asked for, to keep an accurate record of delivery, to meet our legal and accounting
-          obligations, and to keep the platform secure. We do not sell personal data, and we do not use delivery content to train
-          models.
+          Primary infrastructure is hosted on Render, with data processing aligned to Besbpo Workspace OS&apos;s established
+          South-Africa-first data residency approach.
+        </p>
+        <Callout>
+          <strong>UK data — open item, not yet resolved.</strong> If you are a UK Partner Agency, your data is currently processed
+          under this same South-Africa-aligned architecture unless and until a UK-specific data residency decision is made. If UK
+          GDPR applies to your organisation&apos;s data independent of where it is hosted, this is worth raising directly before
+          relying on this policy as final for a UK engagement. This question needs a decision and likely qualified legal review —
+          it is not something to resolve by assumption in either direction.
+        </Callout>
+      </Clause>
+
+      <Clause heading="4. Your rights">
+        <p>
+          Consistent with POPIA: you may request access to, correction of, or deletion of your personal information, subject to
+          what is legally and contractually required to be retained. For example, audit log entries relevant to an active
+          engagement dispute are not deleted on request during that engagement.
         </p>
       </Clause>
 
-      <Clause heading="4. Where it is kept">
+      <Clause heading="5. Retention">
         <p>
-          Workspace data is stored in the United Kingdom on managed infrastructure. Where a sub-processor operates outside the UK,
-          transfers rely on the UK International Data Transfer Addendum or an equivalent safeguard, and the arrangement is recorded
-          in our sub-processor list.
-        </p>
-        <p>
-          Backups are encrypted and held in the same jurisdiction. Restore drills are run on a schedule and evidenced in our
-          operations records.
+          Content and account data are retained for the duration of your engagement plus a reasonable period after, consistent with
+          the corporate site&apos;s own retention practices. Guest-tier access data is retained only as long as needed for the audit
+          trail of that specific scoped access — the access itself expires automatically, but the record that it occurred is
+          retained for accountability.
         </p>
       </Clause>
 
-      <Clause heading="5. How long we keep it">
+      <Clause heading="6. Contact">
         <p>
-          Retention is configurable per organisation. Delivery records follow the retention period your organisation sets, after
-          which they are purged. A legal hold overrides the retention period and blocks purge until it is released.
-        </p>
-      </Clause>
-
-      <Clause heading="6. Sharing">
-        <p>
-          Access inside the workspace is governed by engagement boundaries: a client sees its own engagement, a guest sees only the
-          item they were invited to, and internal channels are never visible to external parties. Outside the workspace we share
-          personal data only with sub-processors and advisers bound by confidentiality, or where the law requires it.
-        </p>
-      </Clause>
-
-      <Clause heading="7. Your rights">
-        <p>
-          You can ask for a copy of your personal data, its correction, its deletion, or a restriction on how it is used, and you can
-          object to processing carried out on a legitimate-interest basis. Requests go to our data protection contact and are
-          answered within one month.
-        </p>
-        <p>If you are unhappy with our response you can complain to the Information Commissioner&apos;s Office (ICO).</p>
-      </Clause>
-
-      <Clause heading="8. Security">
-        <p>
-          Access is capability-based and enforced on the server. Sessions support multi-factor authentication; API keys are stored
-          hashed and can be revoked. Security headers are applied to every response, uploads are inspected, and audit logging cannot
-          be disabled by a user.
+          Questions about this policy, or data access, correction and deletion requests:{' '}
+          <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
         </p>
       </Clause>
     </LegalPage>

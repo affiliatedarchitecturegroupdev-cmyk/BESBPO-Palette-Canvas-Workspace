@@ -118,23 +118,44 @@ export const shadow = {
 } as const;
 
 /**
- * V2 spec §8.1 — the public-surface ramp from the landing mockup. The gradient
- * runs cobalt → violet → magenta across the hero and the multi-dot mark. Kept
- * separate from the app `color` scales so the marketing surface can evolve
- * without touching product semantics.
+ * V2 spec §8.1 — the public-surface ramp, taken from the authoritative logo
+ * assets supplied in the specification package rather than sampled by eye.
+ *
+ * The mark is a five-stop ramp (indigo → violet → mauve → pink → rose) with the
+ * accent blue as a separate centre dot; it is deliberately NOT a three-stop
+ * accent gradient. Treating `cobalt` as the gradient start produced a mark that
+ * did not match the real logo.
  */
 export const brandRamp = {
-  cobalt: '#4f7dff',
+  /** Accent blue: the centre dot of the mark, and the app's accent. */
+  accent: '#4f7dff',
+  indigo: '#7876e0',
   violet: '#9471cb',
+  mauve: '#ba6aae',
+  pink: '#cd67a0',
   magenta: '#d66599',
-  gradient: 'linear-gradient(90deg, #4f7dff 0%, #9471cb 50%, #d66599 100%)',
+  gradient:
+    'linear-gradient(90deg, #7876e0 0%, #9471cb 25%, #ba6aae 50%, #cd67a0 75%, #d66599 100%)',
   /** The landing/marketing ink, per the mockup (distinct from app `base`). */
   ink: '#131021',
   raise: '#1c1830',
 } as const;
 
-/** Multi-stop dot mark used beside the wordmark on the public surface. */
-export const brandDots = [brandRamp.cobalt, brandRamp.violet, brandRamp.magenta] as const;
+/**
+ * The five dots of the logo mark, in mark order. Note this is the *ramp*
+ * sequence, which differs from the three dots drawn beside the wordmark in the
+ * landing mockup (`indigo, mauve, pink`).
+ */
+export const brandDots = [
+  brandRamp.indigo,
+  brandRamp.violet,
+  brandRamp.mauve,
+  brandRamp.pink,
+  brandRamp.magenta,
+] as const;
+
+/** The three-dot pair used in the mockup's header lockup. */
+export const brandDotsCompact = [brandRamp.indigo, brandRamp.mauve, brandRamp.magenta] as const;
 
 /** Status semantic → tone key. Imported by Badge/StatusDot components. */
 export const STATUS_TONE: Record<string, string> = {

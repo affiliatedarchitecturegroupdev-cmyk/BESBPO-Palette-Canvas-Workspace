@@ -16,10 +16,24 @@ const ledger = fs.readFileSync(path.join(root, 'docs/roadmap-ledger.md'), 'utf8'
 const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
 
 const findings = [];
-const rows = ledger.split('\n').filter((l) => /^\| (P|B|V2|A|UI)[\d\-.\u2013]/.test(l));
+/**
+ * Select ledger rows by their *status cell*, not by an id prefix. The previous
+ * prefix list (`P|B|V2|A|UI`) silently skipped any new id family — it missed the
+ * entire `SPA` block when that was added, so five `done` rows went unchecked.
+ * Matching on the status token means a new family is covered as soon as it has a
+ * status, and planning tables (which have no status cell) stay excluded.
+ */
+const STATUSES = new Set(['done', 'todo', 'in-review', 'blocked', 'n/a']);
+const rows = ledger
+  .split('\n')
+  .filter((l) => l.startsWith('|') && l.split('|').some((c) => STATUSES.has(c.trim())));
 for (const line of rows) {
   const cells = line.split('|').map((c) => c.trim());
   const [id, , status, commit, evidence] = cells.slice(1);
+  if (!id || cells.length < 6) {
+    findings.push(`malformed ledger row: ${line.slice(0, 60)}`);
+    continue;
+  }
   if (status === 'done') {
     // pre-PR-workflow rows may reference a commit sha on main instead of a PR
     if (!/PR #\d+/.test(commit) && !/`(main|[0-9a-f]{7,})/.test(commit)) {

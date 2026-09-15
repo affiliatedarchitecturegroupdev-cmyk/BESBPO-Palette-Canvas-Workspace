@@ -1,0 +1,11 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Palette Canvas Workspace logo mark. Colors verified by pixel-sampling
+       the actual product screenshots (not guessed): background #131021,
+       gradient dots #7876e0 -> #9471cb -> #ba6aae -> #cd67a0 -> #d66599. -->
+  <rect width="200" height="200" rx="44" fill="#131021"/>
+  <circle cx="70" cy="70" r="16" fill="#7876e0"/>
+  <circle cx="130" cy="70" r="16" fill="#9471cb"/>
+  <circle cx="70" cy="130" r="16" fill="#cd67a0"/>
+  <circle cx="130" cy="130" r="16" fill="#d66599"/>
+  <circle cx="100" cy="100" r="14" fill="#4f7dff"/>
+</svg>
