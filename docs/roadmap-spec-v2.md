@@ -105,7 +105,7 @@ Independent of Phases 1–5; good parallel-track work.
 
 | # | Scope | Exit criteria | Tests |
 | --- | --- | --- | --- |
-| V2-6.1 | **Visual language** (§8.1) — exact planned palette from the mockups (`#131021` ink, `#1c1830` raise, cobalt `#4a74ed`, violet `#706ed0`, magenta `#c65e8f`) | tokens + CSS mirror the spec colours | snapshot |
+| V2-6.1 | **Visual language** (§8.1) — planned palette, corrected against the mockup (ink `#131021`, raise `#1c1830`, cobalt `#4f7dff`, violet `#9471cb`, magenta `#d66599`) | tokens + CSS mirror the spec colours | snapshot |
 | V2-6.2 | **Landing page** (§8.2) — header, hero slider, info cards, how-it-works, footer, social links | all five sections render; links resolve | e2e: routes 200 |
 | V2-6.3 | **Sign-up branching** (§8.3) — employee request / partner agency / no guest self-serve | three paths expressed, guest has none | e2e: path mapping |
 | V2-6.4 | **Terms / Privacy / Accessibility** (§15.1–15.3) | three pages render spec content incl. honest UK-data + a11y caveats | e2e: routes 200 |

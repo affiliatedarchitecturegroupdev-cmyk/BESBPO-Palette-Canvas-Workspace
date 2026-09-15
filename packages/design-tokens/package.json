@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "npx tsc test/tokens.test.ts --outDir .test-dist --module commonjs --esModuleInterop --skipLibCheck --target ES2021 && node .test-dist/test/tokens.test.js"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

@@ -106,7 +106,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | V2-5.3 | Brief Analysis Agent | in-review | `v2-boards-comms-public-surface` | e2e propose-only records a proposal (16–25 h range), does not apply; human confirm via `ai.review` (ops director) | set `propose-only`; storage blocked while org opted out |
 | V2-5.4 | KPI/Reminder Agent | in-review | `v2-boards-comms-public-surface` | e2e act-and-log reminder applies without approval, raises notification, does not mutate the item | `recipient_id` notification write |
 | V2-5.5 | LLM provider seam (§12.3) | in-review | `v2-boards-comms-public-surface` | e2e catalog reports provider unconfigured + name `none` without env keys; absent key is a graceful no-op | `apps/api/src/llm/llm.provider.ts`; OpenAI-compatible provider behind `PC_LLM_API_KEY`/`BASE_URL`/`MODEL`; provider choice is a human decision, left unconfigured |
-| V2-6.1 | Visual language (§8.1) | in-review | `v2-boards-comms-public-surface` | `brandRamp` + `brandDots` tokens mirror the mockup ramp (cobalt #4f7dff → violet #9471cb → magenta #d66599, ink #131021, raise #1c1830); web build exit 0 | additive to `packages/design-tokens`; app scales untouched |
+| V2-6.1 | Visual language (§8.1) | in-review | `v2-boards-comms-public-surface` | `packages/design-tokens/test/tokens.test.ts` snapshot passes and fails on drift (verified by injecting `#4a74ed` → `brandRamp.cobalt drifted`); sample of `fig-8.1-landing-mockup.png` confirms `#131021`/`#1c1830`/`#4f7dff`/`#9471cb`/`#d66599`; web build exit 0 | additive to `packages/design-tokens`; app scales untouched. Note: `docs/roadmap-spec-v2.md` had cited `#4a74ed`/`#706ed0`/`#c65e8f` for cobalt/violet/magenta — corrected against the mockup |
 | V2-6.2 | Landing page (§8.2) | in-review | `v2-boards-comms-public-surface` | public-surface check: all five sections present (`Every campaign`, `Built for the whole delivery`, `How it works`, `Two ways in`, `Follow along`); route 200; renders without the app shell | `/` moved to public landing; workspace overview moved to `/dashboard` |
 | V2-6.3 | Sign-up branching (§8.3) | in-review | `v2-boards-comms-public-surface` | public-surface check: three paths present (Employee / Partner agency / Client or third party) and the page states there is no guest self-serve | guest has no self-serve path by design |
 | V2-6.4 | Terms / Privacy / Accessibility (§15.1–15.3) | in-review | `v2-boards-comms-public-surface` | public-surface check: three routes 200 with spec content (terms incl. governing law; privacy incl. UK data location; accessibility incl. WCAG 2.2 target, known gaps, and an explicit not-yet-counsel-reviewed caveat) | explicit draft/legal-review caveats per roadmap rule "legal-finalisation is a human decision" |
@@ -147,9 +147,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 - New gate: `scripts/public-surface-check.sh` asserts each public route renders
   its expected content and that the landing page does **not** leak the app
   shell; wired into CI after the test step.
-- Gates: `npm run build` exit 0 (all workspaces); `npm test` → permission tests
-  pass, API e2e **326/326**; drift 0 findings; public-surface check OK;
-  LoC 22,990.
+- Gates: `npm run build` exit 0 (all workspaces); `npm test` → design-token snapshot + permission tests pass, API e2e **326/326**; drift 0 findings; public-surface check OK; LoC 22,990.
 - Human decisions left open (recorded, not decided): LLM provider host, real
   identity-provider exchange, S3-compatible backend, and legal finalisation of
   the terms/privacy/accessibility copy — all three legal pages carry an explicit
