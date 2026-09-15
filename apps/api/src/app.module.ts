@@ -95,6 +95,9 @@ import { FilesService } from './files/files.service';
 import { AgentsController } from './agents/agents.controller';
 import { AgentsService } from './agents/agents.service';
 import { createLlmProvider, LlmProvider } from './llm/llm.provider';
+import { EmailController } from './email/email.controller';
+import { EmailService } from './email/email.service';
+import { EmailTransport, createEmailTransport } from './email/email.transport';
 
 @Module({
   imports: [SecurityModule],
@@ -138,6 +141,7 @@ import { createLlmProvider, LlmProvider } from './llm/llm.provider';
     RiskController,
     TemplateSchemasController,
     AuthController,
+    EmailController,
     BoardsController,
     DashboardsController,
     CommsController,
@@ -188,6 +192,7 @@ import { createLlmProvider, LlmProvider } from './llm/llm.provider';
     RiskService,
     TemplateSchemasService,
     AuthService,
+    EmailService,
     BoardsService,
     ComplianceService,
     DashboardsService,
@@ -195,6 +200,7 @@ import { createLlmProvider, LlmProvider } from './llm/llm.provider';
     FilesService,
     AgentsService,
     { provide: LlmProvider, useFactory: () => createLlmProvider() },
+    { provide: EmailTransport, useFactory: () => createEmailTransport() },
   ],
 })
 export class AppModule implements NestModule {

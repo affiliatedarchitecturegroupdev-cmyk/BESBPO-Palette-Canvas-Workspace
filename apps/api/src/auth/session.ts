@@ -5,6 +5,34 @@ const HOUR = 3_600_000;
 export const SESSION_TTL_LONG = 30 * 24 * HOUR; // remember-me
 export const SESSION_TTL_SHORT = 8 * HOUR; // default
 
+/**
+ * Lifetime for single-use credential tokens (email verification, password
+ * reset). Before N1.1 these had no expiry and stayed valid until consumed, so
+ * a leaked link was live indefinitely. 24h is long enough for a signup
+ * verification that lands in a spam folder, short enough that a forwarded
+ * mailbox does not become a standing credential.
+ */
+export const CREDENTIAL_TOKEN_TTL_MS = 24 * HOUR;
+
+/**
+ * Resend throttle window per outbox `kind` + recipient. Re-issuing a token
+ * inside this window returns the existing pending token rather than minting a
+ * new one, so the endpoint cannot be used to flood a third party's mailbox or
+ * to invalidate a link the user is about to click.
+ */
+export const RESEND_THROTTLE_MS = 60_000;
+
+const MIN_PASSWORD_LENGTH = 8;
+
+/**
+ * Credential policy shared by signup, reset and change. Length only: the spec
+ * asks for a minimum, and composition rules push users toward predictable
+ * substitutions that are weaker than a longer passphrase.
+ */
+export function passwordMeetsPolicy(password: unknown): password is string {
+  return typeof password === 'string' && password.length >= MIN_PASSWORD_LENGTH;
+}
+
 /** 32-byte URL-safe session token (opaque bearer). */
 export function newSessionToken(): string {
   return randomBytes(32).toString('base64url');

@@ -1318,7 +1318,7 @@ async function main() {
     );
     check('person.verified_at set', !!verifiedAt.rows[0].verified_at);
     const verifyReuse = await api(base, '/auth/verify', { method: 'POST', body: { token: realToken } });
-    check('verification token single-use (401 on reuse)', verifyReuse.status === 401);
+    check('verification token single-use (410 on reuse)', verifyReuse.status === 410);
 
     // Login: wrong password 401, correct password → session cookie.
     const wrongLogin = await api(base, '/auth/login', { method: 'POST', body: { email: 'ada@signup.example', password: 'wrong-password-1' } });
@@ -1360,6 +1360,180 @@ async function main() {
     );
     const authActions = authAudit.rows.map((r) => r.action);
     check('auth lifecycle audited', authActions.includes('auth.signed_up') && authActions.includes('auth.logged_in') && authActions.includes('auth.logged_out'));
+
+    /* ================================================================== */
+    /* N1: email transport seam (§0.2) + A-02/A-03 hardening.              */
+    /* ================================================================== */
+
+    console.log('\n-- N1: mail transport + credential hardening');
+
+    // N1.1: with no provider configured, status reports the outbox fallback
+    // and signup still succeeds — the send is recorded, not delivered.
+    const emailStatus = await api(base, '/email/status');
+    check('email status exposes transport + deliverability', emailStatus.status === 200 &&
+      (emailStatus.json as { transport?: string }).transport === 'outbox' &&
+      (emailStatus.json as { deliverable?: boolean }).deliverable === false);
+
+    const outboxSend = await pool.query<{ send_attempts: number; delivered_at: Date | null; transport: string | null; expires_at: Date | null }>(
+      `SELECT send_attempts, delivered_at, transport, expires_at FROM email_outbox WHERE recipient = 'ada@signup.example'`,
+    );
+    check('undeliverable send is recorded with attempts + reason', outboxSend.rows.length === 1 &&
+      outboxSend.rows[0].send_attempts >= 1 && outboxSend.rows[0].delivered_at === null &&
+      outboxSend.rows[0].transport === 'outbox');
+    check('credential token carries an expiry', !!outboxSend.rows[0].expires_at);
+
+    // N1.2: an unverified account cannot log in, but the password was right,
+    // so it is a 403 (usable-account problem) not a 401 (credential problem).
+    const unverified = await api(base, '/auth/signup', {
+      method: 'POST',
+      body: {
+        slug: 'unverified-studio', orgName: 'Unverified Studio', ownerName: 'Una Verified',
+        ownerEmail: 'unverified@signup.example', password: 'correct-horse-9', confirmPassword: 'correct-horse-9',
+      },
+    });
+    check('second org signs up (201)', unverified.status === 201);
+    const unverifiedLogin = await api(base, '/auth/login', {
+      method: 'POST', body: { email: 'unverified@signup.example', password: 'correct-horse-9' },
+    });
+    check('unverified login rejected (403, not 401)', unverifiedLogin.status === 403);
+
+    // Resend is throttled inside the window: the fresh signup row is seconds old.
+    const resend = await api(base, '/auth/verify/resend', {
+      method: 'POST', body: { email: 'unverified@signup.example' },
+    });
+    check('resend inside throttle window is refused', resend.status === 200 &&
+      (resend.json as { throttled?: boolean }).throttled === true);
+    const resendUnknown = await api(base, '/auth/verify/resend', {
+      method: 'POST', body: { email: 'nobody@nowhere.example' },
+    });
+    check('resend for unknown address does not disclose existence', resendUnknown.status === 200 &&
+      (resendUnknown.json as { sent?: boolean }).sent === false);
+
+    // Expired verification token → 410.
+    await pool.query(
+      `UPDATE email_outbox SET expires_at = now() - interval '1 hour' WHERE recipient = 'unverified@signup.example'`,
+    );
+    const expiredRow = await pool.query<{ body: string | null }>(
+      `SELECT body FROM email_outbox WHERE recipient = 'unverified@signup.example'`,
+    );
+    const expiredToken = expiredRow.rows[0].body!.replace('Verify: ', '');
+    const expiredVerify = await api(base, '/auth/verify', { method: 'POST', body: { token: expiredToken } });
+    check('expired verification token rejected (410)', expiredVerify.status === 410);
+
+    // N1.3: password reset round-trip. Request is 200 regardless of existence.
+    // Establish a genuinely live session first: the reset must be the thing
+    // that kills it, not an earlier logout.
+    const preResetLogin = await api(base, '/auth/login', {
+      method: 'POST', body: { email: 'ada@signup.example', password: 'correct-horse-9' },
+    });
+    const preResetSc = preResetLogin.headers?.['set-cookie'] as unknown as string[] | undefined;
+    const preResetCookie = ((Array.isArray(preResetSc) ? preResetSc[0] : '') ?? '').split(';')[0] ?? '';
+    const preResetLive = await api(base, '/auth/session', { headers: { cookie: preResetCookie } });
+    check('session is live immediately before the reset', (preResetLive.json as { authenticated?: boolean }).authenticated === true);
+
+    const resetUnknown = await api(base, '/auth/password/reset/request', {
+      method: 'POST', body: { email: 'nobody@nowhere.example' },
+    });
+    check('reset request for unknown address returns 200', resetUnknown.status === 200);
+    const resetReq = await api(base, '/auth/password/reset/request', {
+      method: 'POST', body: { email: 'ada@signup.example' },
+    });
+    check('reset request accepted (200)', resetReq.status === 200);
+    const resetRow = await pool.query<{ body: string | null }>(
+      `SELECT body FROM email_outbox WHERE kind = 'password.reset' AND recipient = 'ada@signup.example' ORDER BY created_at DESC LIMIT 1`,
+    );
+    check('reset token row written to outbox', resetRow.rows.length === 1 && !!resetRow.rows[0].body);
+    const resetToken = resetRow.rows[0].body!.replace('Reset: ', '');
+    const weakReset = await api(base, '/auth/password/reset', {
+      method: 'POST', body: { token: resetToken, password: 'short', confirmPassword: 'short' },
+    });
+    check('weak reset password rejected (400)', weakReset.status === 400);
+    const resetOk = await api(base, '/auth/password/reset', {
+      method: 'POST', body: { token: resetToken, password: 'brand-new-horse-7', confirmPassword: 'brand-new-horse-7' },
+    });
+    check('password reset completes (200)', resetOk.status === 200);
+    const resetReuse = await api(base, '/auth/password/reset', {
+      method: 'POST', body: { token: resetToken, password: 'another-horse-8', confirmPassword: 'another-horse-8' },
+    });
+    check('reset token single-use (410 on reuse)', resetReuse.status === 410);
+
+    // Expired reset token → 410 (ledger N1.3 acceptance).
+    await api(base, '/auth/password/reset/request', { method: 'POST', body: { email: 'ada@signup.example' } });
+    const expiredResetRow = await pool.query<{ id: string; body: string | null }>(
+      `SELECT id, body FROM email_outbox WHERE kind = 'password.reset' AND recipient = 'ada@signup.example' AND consumed_at IS NULL ORDER BY created_at DESC LIMIT 1`,
+    );
+    await pool.query(`UPDATE email_outbox SET expires_at = now() - interval '1 hour' WHERE id = $1`, [
+      expiredResetRow.rows[0].id,
+    ]);
+    const expiredResetToken = expiredResetRow.rows[0].body!.replace('Reset: ', '');
+    const expiredReset = await api(base, '/auth/password/reset', {
+      method: 'POST',
+      body: { token: expiredResetToken, password: 'expired-horse-2', confirmPassword: 'expired-horse-2' },
+    });
+    check('expired reset token rejected (410)', expiredReset.status === 410);
+
+    // An unknown reset token is a 401 — not a token we ever issued.
+    const bogusReset = await api(base, '/auth/password/reset', {
+      method: 'POST', body: { token: 'never-issued-token', password: 'bogus-horse-3', confirmPassword: 'bogus-horse-3' },
+    });
+    check('unknown reset token rejected (401)', bogusReset.status === 401);
+
+    // Measured immediately after the reset, before any new login can create a
+    // session: the reset must leave nothing active behind.
+    const activeAfterReset = await pool.query<{ n: string }>(
+      `SELECT count(*)::text AS n FROM session WHERE person_id = (SELECT id FROM person WHERE email = 'ada@signup.example') AND status = 'active'`,
+    );
+    check('reset left no active sessions behind', Number(activeAfterReset.rows[0].n) === 0);
+
+    // A reset revokes the pre-existing session (it was issued under the old
+    // credential) and the new password logs in.
+    const loginOldPassword = await api(base, '/auth/login', {
+      method: 'POST', body: { email: 'ada@signup.example', password: 'correct-horse-9' },
+    });
+    check('old password no longer logs in (401)', loginOldPassword.status === 401);
+    const loginNewPassword = await api(base, '/auth/login', {
+      method: 'POST', body: { email: 'ada@signup.example', password: 'brand-new-horse-7' },
+    });
+    check('new password logs in (201)', loginNewPassword.status === 201);
+    const newCookieHeader = (() => {
+      const sc = loginNewPassword.headers?.['set-cookie'] as unknown as string[] | undefined;
+      return Array.isArray(sc) ? sc[0] : undefined;
+    })();
+    const newCookieStr = (newCookieHeader ?? '').split(';')[0] ?? '';
+    const staleSession = await api(base, '/auth/session', { headers: { cookie: preResetCookie } });
+    check('pre-reset session revoked by reset', (staleSession.json as { authenticated?: boolean }).authenticated !== true);
+
+    // Change password: wrong current password 401, correct one rotates and
+    // keeps the caller's own session alive.
+    const wrongChange = await api(base, '/auth/password/change', {
+      method: 'POST', headers: { cookie: newCookieStr },
+      body: { currentPassword: 'not-the-password', password: 'changed-horse-1', confirmPassword: 'changed-horse-1' },
+    });
+    check('change with wrong current password rejected (401)', wrongChange.status === 401);
+    const changeOk = await api(base, '/auth/password/change', {
+      method: 'POST', headers: { cookie: newCookieStr },
+      body: { currentPassword: 'brand-new-horse-7', password: 'changed-horse-1', confirmPassword: 'changed-horse-1' },
+    });
+    check('change password succeeds (200)', changeOk.status === 200);
+    const stillAuthed = await api(base, '/auth/session', { headers: { cookie: newCookieStr } });
+    check("changer's own session survives the rotation", (stillAuthed.json as { authenticated?: boolean }).authenticated === true);
+    const changeLogin = await api(base, '/auth/login', {
+      method: 'POST', body: { email: 'ada@signup.example', password: 'changed-horse-1' },
+    });
+    check('post-change password logs in (201)', changeLogin.status === 201);
+
+    // Explicit session revocation endpoint (A-03).
+    const revokeOthers = await api(base, '/auth/sessions/revoke', {
+      method: 'POST', headers: { cookie: newCookieStr },
+    });
+    check('session revoke endpoint reports a count', revokeOthers.status === 200 &&
+      typeof (revokeOthers.json as { revoked?: number }).revoked === 'number');
+    const afterRevoke = await api(base, '/auth/session', { headers: { cookie: newCookieStr } });
+    check('caller keeps their own session after revoke-others', (afterRevoke.json as { authenticated?: boolean }).authenticated === true);
+
+    check('password change + reset audited', (await pool.query<{ action: string }>(
+      `SELECT action FROM audit_event WHERE org_id = (SELECT org_id FROM person WHERE email = 'ada@signup.example')`,
+    )).rows.map((r) => r.action).some((a) => a === 'auth.password_reset' || a === 'auth.password_changed'));
 
     /* ================================================================== */
     /* V2 spec §9/§10/§11/§12/§13/§14 — boards, semantic roles, guest,    */

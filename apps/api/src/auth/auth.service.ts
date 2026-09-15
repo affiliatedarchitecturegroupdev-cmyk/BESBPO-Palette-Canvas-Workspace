@@ -1,15 +1,25 @@
-import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
-import { randomUUID, randomBytes } from 'crypto';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  GoneException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { randomBytes, randomUUID } from 'crypto';
 import type { PoolClient } from 'pg';
 import { Role, OrgStatus, PlanTier } from '@palette-canvas/shared';
 import { Database } from '../db/database';
 import { AuditService } from '../audit/audit.service';
+import { EmailService } from '../email/email.service';
 import { hashPassword, verifyPassword } from './password';
 import {
+  RESEND_THROTTLE_MS,
   SESSION_TTL_LONG,
   SESSION_TTL_SHORT,
   hashToken,
   newSessionToken,
+  passwordMeetsPolicy,
 } from './session';
 import { TemplateDefinition } from '../templates/templates.service';
 
@@ -66,6 +76,7 @@ export class AuthService {
   constructor(
     private readonly db: Database,
     private readonly audit: AuditService,
+    private readonly email: EmailService,
   ) {}
 
   async signup(input: SignupInput): Promise<{ org: OrgRow; person: PersonRow }> {
@@ -88,6 +99,7 @@ export class AuthService {
     const trialEnds = new Date(Date.now() + TRIAL_DAYS * 86_400_000);
 
     const client = await this.db.connect();
+    let verifyOutboxId: string | null = null;
     try {
       await client.query('BEGIN');
       await client.query(
@@ -111,19 +123,18 @@ export class AuthService {
       );
       await this.seedStarterTemplates(client, orgId);
       const verifyToken = randomBytes(24).toString('base64url');
-      await client.query(
-        `INSERT INTO email_outbox (id, org_id, recipient, subject, body, kind, token_hash)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          randomUUID(),
+      const enqueued = await this.email.enqueue(
+        {
           orgId,
-          email,
-          'Verify your Palette Canvas account',
-          `Verify: ${verifyToken}`,
-          'signup.verify',
-          hashToken(verifyToken),
-        ],
+          recipient: email,
+          subject: 'Verify your Palette Canvas account',
+          body: `Verify: ${verifyToken}`,
+          kind: 'signup.verify',
+          token: verifyToken,
+        },
+        client,
       );
+      verifyOutboxId = enqueued.id;
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
@@ -132,28 +143,111 @@ export class AuthService {
       client.release();
     }
 
+    // After commit, and never throwing: a transport failure must not fail a
+    // signup that is already durable. The outbox row records the outcome.
+    if (verifyOutboxId) await this.email.dispatch(verifyOutboxId);
+
     await this.audit.log(orgId, personId, 'auth.signed_up', 'organisation', orgId, { email });
     const org = { id: orgId, slug, name: input.orgName.trim(), display_name: input.orgName.trim(), status: OrgStatus.Trial, plan_tier: PlanTier.Free, owner_person_id: personId, trial_ends_at: trialEnds } satisfies OrgRow;
     return { org, person: { id: personId, org_id: orgId, email, name: input.ownerName.trim(), password_hash: passwordHash, verified_at: null } };
   }
 
-  /** Consume a single-use verification outbox token (A-02 primitives, used by signup). */
+  /**
+   * Consume a single-use verification outbox token (A-02).
+   *
+   * Distinguishes three failure modes deliberately:
+   *  - unknown token → 401 (nothing to say; do not confirm a token ever existed)
+   *  - already consumed → 410 Gone (the token was real; the state is now closed)
+   *  - past `expires_at` → 410 Gone (same reasoning, different cause)
+   * A plain 401 for a replayed token hides from a legitimate user that their
+   * click already worked, which is the common support case.
+   */
   async verifyEmail(token: string): Promise<{ orgId: string; personId: string }> {
-    const tokenHash = hashToken(token);
-    const row = await this.db.oneOrNull<{ id: string; org_id: string; recipient: string; consumed_at: Date | null }>(
-      `SELECT id, org_id, recipient, consumed_at FROM email_outbox WHERE kind = 'signup.verify' AND token_hash = $1`,
-      [tokenHash],
+    const row = await this.consumeToken(token, 'signup.verify');
+    const person = await this.db.oneOrNull<{ id: string }>(
+      'SELECT id FROM person WHERE org_id = $1 AND email = $2',
+      [row.orgId, row.recipient],
     );
-    if (!row) throw new UnauthorizedException('invalid or expired verification token');
-    if (row.consumed_at) throw new UnauthorizedException('verification token already used');
-    const person = await this.db.oneOrNull<{ id: string }>('SELECT id FROM person WHERE org_id = $1 AND email = $2', [
-      row.org_id,
-      row.recipient,
-    ]);
     if (!person) throw new UnauthorizedException('verification target not found');
-    await this.db.query('UPDATE person SET verified_at = now() WHERE id = $1', [person.id]);
+    await this.db.query('UPDATE person SET verified_at = now() WHERE id = $1 AND verified_at IS NULL', [
+      person.id,
+    ]);
     await this.db.query('UPDATE email_outbox SET consumed_at = now() WHERE id = $1', [row.id]);
-    return { orgId: row.org_id, personId: person.id };
+    await this.audit.log(row.orgId, person.id, 'auth.email_verified', 'person', person.id, {});
+    return { orgId: row.orgId, personId: person.id };
+  }
+
+  /** Shared single-use token consumption for verify + reset (A-02/A-03). */
+  private async consumeToken(
+    token: string,
+    kind: string,
+  ): Promise<{ id: string; orgId: string; recipient: string }> {
+    if (!token) throw new UnauthorizedException('invalid or expired token');
+    const row = await this.db.oneOrNull<{
+      id: string;
+      org_id: string;
+      recipient: string;
+      consumed_at: Date | null;
+      expires_at: Date | null;
+    }>(
+      `SELECT id, org_id, recipient, consumed_at, expires_at
+         FROM email_outbox WHERE kind = $1 AND token_hash = $2`,
+      [kind, hashToken(token)],
+    );
+    if (!row) throw new UnauthorizedException('invalid or expired token');
+    if (row.consumed_at) throw new GoneException('token already used');
+    if (row.expires_at && new Date(row.expires_at).getTime() < Date.now()) {
+      throw new GoneException('token expired');
+    }
+    return { id: row.id, orgId: row.org_id, recipient: row.recipient };
+  }
+
+  /**
+   * Re-issue a verification link (A-02). Throttled per recipient so this
+   * cannot be used to flood a mailbox: inside the throttle window the existing
+   * pending token is returned instead of a new one being minted, which also
+   * avoids invalidating a link the user may already have open.
+   */
+  async resendVerification(rawEmail: string): Promise<{ sent: boolean; throttled: boolean }> {
+    const email = rawEmail.toLowerCase().trim();
+    const person = await this.db.oneOrNull<{ id: string; org_id: string; verified_at: Date | null }>(
+      'SELECT id, org_id, verified_at FROM person WHERE email = $1',
+      [email],
+    );
+    // Always report success for an unknown address — the endpoint must not
+    // become an account-existence oracle.
+    if (!person) return { sent: false, throttled: false };
+    if (person.verified_at) return { sent: false, throttled: false };
+
+    const pending = await this.db.oneOrNull<{ created_at: Date; token_hash: string | null }>(
+      `SELECT created_at, token_hash FROM email_outbox
+        WHERE kind = 'signup.verify' AND recipient = $1 AND consumed_at IS NULL
+        ORDER BY created_at DESC LIMIT 1`,
+      [email],
+    );
+    const withinThrottle =
+      pending && Date.now() - new Date(pending.created_at).getTime() < RESEND_THROTTLE_MS;
+    if (withinThrottle) {
+      await this.audit.log(person.org_id, person.id, 'auth.verification_resent', 'person', person.id, {
+        throttled: true,
+      });
+      return { sent: false, throttled: true };
+    }
+
+    const token = randomBytes(24).toString('base64url');
+    const enqueued = await this.email.enqueue({
+      orgId: person.org_id,
+      recipient: email,
+      subject: 'Verify your Palette Canvas account',
+      body: `Verify: ${token}`,
+      kind: 'signup.verify',
+      token,
+    });
+    const delivered = await this.email.dispatch(enqueued.id);
+    await this.audit.log(person.org_id, person.id, 'auth.verification_resent', 'person', person.id, {
+      delivered,
+    });
+    return { sent: delivered, throttled: false };
   }
 
   async login(input: LoginInput): Promise<AuthSession> {
@@ -170,8 +264,12 @@ export class AuthService {
     }
     const ok = await verifyPassword(person.password_hash, input.password);
     if (!ok) throw new UnauthorizedException('invalid credentials');
+    // 403, not 401: the credentials were correct, so this is not a failed
+    // authentication — it is a correct authentication against an account that
+    // is not yet usable. Distinguishing them lets the client offer "resend
+    // verification" instead of "check your password".
     if (!person.verified_at) {
-      throw new UnauthorizedException('email not verified');
+      throw new ForbiddenException('email not verified');
     }
     const ttlMs = input.remember ? SESSION_TTL_LONG : SESSION_TTL_SHORT;
     const token = newSessionToken();
@@ -182,6 +280,121 @@ export class AuthService {
     );
     await this.audit.log(person.org_id, person.id, 'auth.logged_in', 'session', person.id, {});
     return { token, ttlMs };
+  }
+
+  /**
+   * Revoke every active session for a person, optionally sparing one token
+   * (A-03). Used on password change/reset so a stolen session cannot outlive
+   * the credential it was obtained with. Sparing the current token keeps the
+   * user who just changed their own password logged in.
+   */
+  async revokeSessions(personId: string, exceptToken?: string): Promise<number> {
+    const exceptional = exceptToken ? hashToken(exceptToken) : null;
+    const { rows } = await this.db.query<{ id: string; org_id: string }>(
+      `UPDATE session SET status = 'revoked', revoked_at = now()
+        WHERE person_id = $1 AND status = 'active'
+          AND ($2::text IS NULL OR token_hash <> $2)
+        RETURNING id, org_id`,
+      [personId, exceptional],
+    );
+    for (const row of rows) {
+      await this.audit.log(row.org_id, personId, 'auth.session_revoked', 'session', row.id, {
+        reason: 'password_change',
+      });
+    }
+    return rows.length;
+  }
+
+  /**
+   * Start a password reset (A-03). Always reports success so the endpoint is
+   * not an account-existence oracle, and always writes an audit row so a real
+   * reset attempt is traceable even when the address is unknown.
+   */
+  async requestPasswordReset(rawEmail: string): Promise<{ sent: boolean }> {
+    const email = rawEmail.toLowerCase().trim();
+    const person = await this.db.oneOrNull<{ id: string; org_id: string }>(
+      'SELECT id, org_id FROM person WHERE email = $1',
+      [email],
+    );
+    if (!person) return { sent: false };
+
+    const token = randomBytes(24).toString('base64url');
+    const enqueued = await this.email.enqueue({
+      orgId: person.org_id,
+      recipient: email,
+      subject: 'Reset your Palette Canvas password',
+      body: `Reset: ${token}`,
+      kind: 'password.reset',
+      token,
+    });
+    const delivered = await this.email.dispatch(enqueued.id);
+    await this.audit.log(person.org_id, person.id, 'auth.password_reset_requested', 'person', person.id, {
+      delivered,
+    });
+    return { sent: delivered };
+  }
+
+  /**
+   * Complete a password reset (A-03). Consumes the token, rehashes, and revokes
+   * every existing session — a reset is the signal that the old credential is
+   * no longer trusted, so no session issued under it may survive.
+   */
+  async resetPassword(token: string, newPassword: string): Promise<{ personId: string }> {
+    if (!passwordMeetsPolicy(newPassword)) {
+      throw new BadRequestException('password must be at least 8 characters');
+    }
+    const row = await this.consumeToken(token, 'password.reset');
+    const person = await this.db.oneOrNull<{ id: string }>(
+      'SELECT id FROM person WHERE org_id = $1 AND email = $2',
+      [row.orgId, row.recipient],
+    );
+    if (!person) throw new UnauthorizedException('reset target not found');
+    const passwordHash = await hashPassword(newPassword);
+    await this.db.query(
+      'UPDATE person SET password_hash = $2, password_changed_at = now() WHERE id = $1',
+      [person.id, passwordHash],
+    );
+    await this.db.query('UPDATE email_outbox SET consumed_at = now() WHERE id = $1', [row.id]);
+    const revoked = await this.revokeSessions(person.id);
+    await this.audit.log(row.orgId, person.id, 'auth.password_reset', 'person', person.id, {
+      sessionsRevoked: revoked,
+    });
+    return { personId: person.id };
+  }
+
+  /**
+   * Change a password from a live session (A-03). Requires the current password
+   * so a hijacked session cannot escalate to full account takeover, and revokes
+   * other sessions while keeping the caller's own.
+   */
+  async changePassword(
+    currentToken: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ personId: string; sessionsRevoked: number }> {
+    if (!passwordMeetsPolicy(newPassword)) {
+      throw new BadRequestException('password must be at least 8 characters');
+    }
+    const resolved = await this.resolveSession(currentToken);
+    if (!resolved) throw new UnauthorizedException('not authenticated');
+    if (!resolved.person.password_hash) throw new UnauthorizedException('no password set');
+    const ok = await verifyPassword(resolved.person.password_hash, currentPassword);
+    if (!ok) throw new UnauthorizedException('current password is incorrect');
+    const passwordHash = await hashPassword(newPassword);
+    await this.db.query(
+      'UPDATE person SET password_hash = $2, password_changed_at = now() WHERE id = $1',
+      [resolved.person.id, passwordHash],
+    );
+    const sessionsRevoked = await this.revokeSessions(resolved.person.id, currentToken);
+    await this.audit.log(
+      resolved.org.id,
+      resolved.person.id,
+      'auth.password_changed',
+      'person',
+      resolved.person.id,
+      { sessionsRevoked },
+    );
+    return { personId: resolved.person.id, sessionsRevoked };
   }
 
   async logout(token: string | undefined): Promise<void> {
