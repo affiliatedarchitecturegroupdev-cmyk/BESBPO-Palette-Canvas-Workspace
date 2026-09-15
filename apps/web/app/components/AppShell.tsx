@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ROLE_CAPABILITIES, Role } from '@palette-canvas/shared';
-import { isNavActive, NAV_SECTIONS, visibleNavItem } from './nav';
+import { isNavActive, isPublicPath, NAV_SECTIONS, visibleNavItem } from './nav';
 
 /**
  * AppShell — responsive application chrome for Palette Canvas.
@@ -16,7 +16,7 @@ import { isNavActive, NAV_SECTIONS, visibleNavItem } from './nav';
  */
 
 const BRAND_MARK = '◪';
-const TOOLBAR_ITEMS = ['/', '/projects', '/intake', '/notifications'];
+const TOOLBAR_ITEMS = ['/dashboard', '/projects', '/intake', '/notifications'];
 
 export default function AppShell({
   email,
@@ -82,6 +82,12 @@ export default function AppShell({
   const activeToolbar = toolbar.find((i) => isNavActive(i, pathname));
   const asideWidth = collapsed ? 76 : 264;
 
+  // The public surface (spec §8, §15) is deliberately outside the app chrome:
+  // a visitor who has never signed in should not see a navigation shell.
+  if (isPublicPath(pathname)) {
+    return <div style={{ minHeight: '100vh', background: 'var(--brand-deep)' }}>{children}</div>;
+  }
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--brand-deep)' }}>
       {/* ══ Top bar ══ */}
@@ -123,7 +129,7 @@ export default function AppShell({
 
         {/* Brand mark */}
         <Link
-          href="/"
+          href="/dashboard"
           aria-label="Palette Canvas home"
           style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ink)', textDecoration: 'none' }}
         >

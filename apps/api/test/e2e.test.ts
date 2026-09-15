@@ -77,7 +77,12 @@ async function main() {
       rate_card, rate_card_entry, estimate, estimate_line,
       asset, job, automation_rule, automation_run, ai_action,
       legal_hold, permission_review, role_capability_override,
-      api_key, esign_envelope, session, email_outbox
+      api_key, esign_envelope, session, email_outbox,
+      agent_run, dashboard_metric, dashboard_widget, dashboard,
+      meeting_participant, meeting, message, channel_member, channel,
+      item_file, file_object,
+      guest_link, compliance_check, subitem, subitem_column, board_view,
+      item, board_group, board_column, board, workspace, engagement
     CASCADE
   `);
 
@@ -1355,6 +1360,556 @@ async function main() {
     );
     const authActions = authAudit.rows.map((r) => r.action);
     check('auth lifecycle audited', authActions.includes('auth.signed_up') && authActions.includes('auth.logged_in') && authActions.includes('auth.logged_out'));
+
+    /* ================================================================== */
+    /* V2 spec §9/§10/§11/§12/§13/§14 — boards, semantic roles, guest,    */
+    /* compliance guard, dashboards, communication and files.             */
+    /* ================================================================== */
+
+    console.log('\n-- V2: boards, semantic roles, items');
+
+    const engA = randomUUID();
+    const engB = randomUUID();
+    const amPerson = await pool.query<{ id: string }>(`SELECT id FROM person WHERE email = 'am@test.example'`);
+    const amId = amPerson.rows[0].id;
+    const leadPerson = await pool.query<{ id: string }>(`SELECT id FROM person WHERE email = 'lead@test.example'`);
+    const v2LeadId = leadPerson.rows[0].id;
+    await pool.query(
+      `INSERT INTO engagement (id, org_id, agency_id, name) VALUES ($1,$2,$3,$4), ($5,$2,$6,$7)`,
+      [engA, orgId, agencyA, 'Engagement A', engB, agencyB, 'Engagement B'],
+    );
+    // Bind the AM and the lead to Engagement A only — this is the V2 boundary.
+    await pool.query(
+      `INSERT INTO role_binding (person_id, role, scope_type, scope_id) VALUES ($1,'account_manager','engagement',$2), ($3,'production_lead','engagement',$2)`,
+      [amId, engA, v2LeadId],
+    );
+
+    const wsA = await api(base, '/boards/workspaces', {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Client Workspace A', engagementId: engA },
+    });
+    const wsAId = (wsA.json as { id: string }).id;
+    check('client workspace created for an engagement', wsA.status === 201 && Boolean(wsAId));
+
+    const wsNoEng = await api(base, '/boards/workspaces', {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Broken', workspaceType: 'client' },
+    });
+    check('client workspace without engagement rejected', wsNoEng.status === 400);
+
+    const boardA = await api(base, '/boards', {
+      email: 'am@test.example', method: 'POST',
+      body: { workspaceId: wsAId, name: 'Production Pipeline' },
+    });
+    const boardAId = (boardA.json as { id: string }).id;
+    check('board created in workspace', boardA.status === 201 && Boolean(boardAId));
+
+    // Every fresh board carries the two system columns (§9.4).
+    const detail0 = await api(base, `/boards/${boardAId}`, { email: 'am@test.example' });
+    const detail0Body = detail0.json as { columns: Array<{ column_type: string; is_system: boolean }> };
+    const systemTypes = detail0Body.columns.filter((c) => c.is_system).map((c) => c.column_type).sort();
+    check('board opens with creation_log + last_updated columns', JSON.stringify(systemTypes) === JSON.stringify(['creation_log', 'last_updated']));
+
+    // Column types: valid, unknown, and config-required.
+    const statusCol = await api(base, `/boards/${boardAId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Production stage', columnType: 'status', config: { labels: [{ id: 's1', text: 'In progress' }] }, semanticRole: 'production_stage' },
+    });
+    const statusColId = (statusCol.json as { id: string }).id;
+    check('status column with semantic role created', statusCol.status === 201);
+
+    const badType = await api(base, `/boards/${boardAId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Nope', columnType: 'telepathy' },
+    });
+    check('unknown column type rejected 400', badType.status === 400);
+
+    const noLabels = await api(base, `/boards/${boardAId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Stage no labels', columnType: 'status' },
+    });
+    check('status column without labels rejected 400', noLabels.status === 400);
+
+    const badRole = await api(base, `/boards/${boardAId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Rogue', columnType: 'text', semanticRole: 'not_a_role' },
+    });
+    check('unknown semantic role rejected 400', badRole.status === 400);
+
+    const systemColType = await api(base, `/boards/${boardAId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Sneaky', columnType: 'creation_log' },
+    });
+    check('system column type cannot be user-added', systemColType.status === 400);
+
+    const hoursCol = await api(base, `/boards/${boardAId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Capacity hours', columnType: 'duration', config: { unit: 'hours' }, semanticRole: 'capacity_hours' },
+    });
+    const hoursColId = (hoursCol.json as { id: string }).id;
+    check('duration/capacity_hours column created', hoursCol.status === 201);
+
+    const qaTechCol = await api(base, `/boards/${boardAId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Technical QA', columnType: 'status', config: { labels: [{ id: 'passed', text: 'Passed' }, { id: 'failed', text: 'Failed' }] }, semanticRole: 'qa_technical' },
+    });
+    const qaTechColId = (qaTechCol.json as { id: string }).id;
+    check('qa_technical semantic column created', qaTechCol.status === 201);
+
+    const semanticList = await api(base, '/boards/semantic-roles', { email: 'am@test.example' });
+    check('semantic role vocabulary exposed', Array.isArray((semanticList.json as { roles: string[] }).roles) && (semanticList.json as { roles: string[] }).roles.length === 9);
+
+    // Items.
+    const v2ItemA = await api(base, `/boards/${boardAId}/items`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Acme launch film', columnValues: { [hoursColId]: 12, [statusColId]: 's1' } },
+    });
+    const v2ItemAId = (v2ItemA.json as { id: string }).id;
+    check('item created with column values', v2ItemA.status === 201 && Boolean(v2ItemAId));
+
+    const strayColumn = await api(base, `/boards/${boardAId}/items`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Bad', columnValues: { 'not-a-column': 1 } },
+    });
+    check('column value from another board rejected', strayColumn.status === 400);
+
+    // Aggregation: the item write above must have produced dashboard metrics.
+    const v2Metrics = await pool.query<{ semantic_role: string; numeric_value: number | null }>(
+      'SELECT semantic_role, numeric_value FROM dashboard_metric WHERE item_id = $1 ORDER BY semantic_role',
+      [v2ItemAId],
+    );
+    const rolesWritten = v2Metrics.rows.map((r) => r.semantic_role);
+    check('semantic-role values aggregated into dashboard_metric', rolesWritten.includes('capacity_hours') && rolesWritten.includes('production_stage'));
+    const capMetric = v2Metrics.rows.find((r) => r.semantic_role === 'capacity_hours');
+    check('capacity_hours aggregated numerically', Number(capMetric?.numeric_value) === 12);
+
+    console.log('\n-- V2: engagement-boundary isolation (§7.7/§14)');
+
+    const boardsForB = await api(base, '/boards', { email: 'am@test.example' });
+    check('engagement-scoped user sees only its own board', Array.isArray(boardsForB.json) && (boardsForB.json as unknown[]).length === 1);
+
+    const otherEngagementBoard = await api(base, `/boards/${boardAId}`, { email: 'agency-b@test.example' });
+    check('foreign-engagement actor refused board (403)', otherEngagementBoard.status === 403);
+
+    // Management sees across engagements.
+    const opsBoards = await api(base, '/boards', { email: 'ops@test.example' });
+    check('management reads boards across engagements', Array.isArray(opsBoards.json) && (opsBoards.json as unknown[]).length >= 1);
+
+    console.log('\n-- V2: compliance guard blocks qa_technical (§12.5)');
+
+    const guardRun = await api(base, `/boards/items/${v2ItemAId}/compliance/run`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { files: [{ name: 'final-v3 draft internal.jpg', metadata: { author: 'Acme Corp' } }] },
+    });
+    const guardRows = guardRun.json as Array<{ id: string; check_type: string; status: string }>;
+    check('guard records all three scan types', guardRun.status === 201 && guardRows.length === 3);
+    check('metadata scan fails on leaked author', guardRows.some((r) => r.check_type === 'metadata_scan' && r.status === 'failed'));
+    check('filename scan fails on internal marker', guardRows.some((r) => r.check_type === 'filename_scan' && r.status === 'failed'));
+    check('attribution scan fails without licence', guardRows.some((r) => r.check_type === 'attribution_scan' && r.status === 'failed'));
+
+    const blockedQa = await api(base, `/boards/items/${v2ItemAId}`, {
+      email: 'lead@test.example', method: 'PATCH',
+      body: { columnValues: { [qaTechColId]: 'passed' } },
+    });
+    check('qa_technical blocked while compliance finding open', blockedQa.status === 400);
+
+    const failedCheck = guardRows.find((r) => r.check_type === 'metadata_scan');
+    const cleared = await api(base, `/boards/compliance/${failedCheck?.id}/clear`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { reason: 'Author metadata stripped in the resubmitted file' },
+    });
+    check('named human clears a finding', cleared.status === 201);
+
+    const clearWithoutReason = await api(base, `/boards/compliance/${guardRows.find((r) => r.check_type === 'filename_scan')?.id}/clear`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { reason: '' },
+    });
+    check('clearing without a reason rejected', clearWithoutReason.status === 400);
+
+    // Two findings remain open, so the gate still holds.
+    const stillBlocked = await api(base, `/boards/items/${v2ItemAId}`, {
+      email: 'lead@test.example', method: 'PATCH',
+      body: { columnValues: { [qaTechColId]: 'passed' } },
+    });
+    check('gate holds while any finding remains open', stillBlocked.status === 400);
+
+    for (const r of guardRows.filter((x) => x.status === 'failed' && x.id !== failedCheck?.id)) {
+      await api(base, `/boards/compliance/${r.id}/clear`, {
+        email: 'lead@test.example', method: 'POST',
+        body: { reason: 'Reviewed and accepted by production lead' },
+      });
+    }
+    const qaPasses = await api(base, `/boards/items/${v2ItemAId}`, {
+      email: 'lead@test.example', method: 'PATCH',
+      body: { columnValues: { [qaTechColId]: 'passed' } },
+    });
+    check('qa_technical passes once every finding is cleared', qaPasses.status === 200);
+
+    console.log('\n-- V2: guest scope is one item, time-boxed (§14.1/§14.4)');
+
+    const guestLink = await api(base, `/boards/items/${v2ItemAId}/guest-links`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { email: 'guest@acme.example', expiresInDays: 7 },
+    });
+    const guestToken = (guestLink.json as { token: string }).token;
+    check('guest link created with expiry', guestLink.status === 201 && Boolean(guestToken));
+
+    const longGuestLink = await api(base, `/boards/items/${v2ItemAId}/guest-links`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { email: 'guest@acme.example', expiresInDays: 365 },
+    });
+    check('guest link expiry beyond 90 days rejected', longGuestLink.status === 400);
+
+    const guestPerson = randomUUID();
+    await pool.query('INSERT INTO person (id, org_id, email, name) VALUES ($1,$2,$3,$4)', [
+      guestPerson, orgId, 'guest@acme.example', 'Acme Guest',
+    ]);
+    await pool.query(
+      `INSERT INTO role_binding (person_id, role, scope_type, scope_id) VALUES ($1,'guest','engagement',$2)`,
+      [guestPerson, engA],
+    );
+
+    const guestReadsItem = await api(base, `/boards/items/${v2ItemAId}`, { email: 'guest@acme.example' });
+    check('guest reads its one scoped item', guestReadsItem.status === 200 && (guestReadsItem.json as { id: string }).id === v2ItemAId);
+
+    // A second item in the same board — the guest must not reach it.
+    const v2ItemB = await api(base, `/boards/${boardAId}/items`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { name: 'Confidential second job' },
+    });
+    const v2ItemBId = (v2ItemB.json as { id: string }).id;
+    const guestReadsOther = await api(base, `/boards/items/${v2ItemBId}`, { email: 'guest@acme.example' });
+    check('guest cannot read a sibling item (404, no existence hint)', guestReadsOther.status === 404);
+
+    const guestListsBoard = await api(base, `/boards/${boardAId}`, { email: 'guest@acme.example' });
+    check('guest refused board-level read', guestListsBoard.status === 403);
+
+    const guestWritesItem = await api(base, `/boards/items/${v2ItemAId}`, {
+      email: 'guest@acme.example', method: 'PATCH', body: { name: 'Guest rename' },
+    });
+    check('guest cannot edit the item', guestWritesItem.status === 403);
+
+    // Expiry: push the link into the past, the guest loses access entirely.
+    await pool.query(`UPDATE guest_link SET expires_at = now() - interval '1 day' WHERE token = $1`, [guestToken]);
+    const guestAfterExpiry = await api(base, `/boards/items/${v2ItemAId}`, { email: 'guest@acme.example' });
+    check('expired guest link resolves to no access', guestAfterExpiry.status === 401);
+    await pool.query(`UPDATE guest_link SET expires_at = now() + interval '7 days' WHERE token = $1`, [guestToken]);
+
+    console.log('\n-- V2: dashboards read only aggregated metrics (§10)');
+
+    const v2Dash = await api(base, '/dashboards', {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Engagement A health', scopeRole: 'account_manager', engagementId: engA, widgets: ['capacity_kpi', 'qa_pass_rate', 'workload_leaderboard'] },
+    });
+    const dashId = (v2Dash.json as { id: string }).id;
+    check('account-manager dashboard created with widgets', v2Dash.status === 201 && Boolean(dashId));
+
+    const unscopedDash = await api(base, '/dashboards', {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'No engagement', scopeRole: 'client' },
+    });
+    check('client dashboard without engagement rejected', unscopedDash.status === 400);
+
+    const rendered = await api(base, `/dashboards/${dashId}`, { email: 'am@test.example' });
+    const renderedBody = rendered.json as { widgets: Array<{ widget_type: string; value: number | null }> };
+    const capacityWidget = renderedBody.widgets.find((w) => w.widget_type === 'capacity_kpi');
+    check('capacity KPI reads the aggregated metric (12 hours)', Number(capacityWidget?.value) === 12);
+    const passWidget = renderedBody.widgets.find((w) => w.widget_type === 'qa_pass_rate');
+    check('QA pass-rate widget computed from metrics', passWidget?.value === 100);
+
+    const badWidget = await api(base, `/dashboards/${dashId}/widgets`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'x', widgetType: 'crystal_ball' },
+    });
+    check('unknown widget type rejected 400', badWidget.status === 400);
+
+    const v2Catalog = await api(base, '/dashboards/widget-catalog', { email: 'am@test.example' });
+    check('widget catalog exposes the six §10.6 widgets', (v2Catalog.json as { widgets: unknown[] }).widgets.length === 6);
+
+    // Client dashboards are role-scoped: the client actor sees only its own.
+    const clientPerson = randomUUID();
+    await pool.query('INSERT INTO person (id, org_id, email, name) VALUES ($1,$2,$3,$4)', [
+      clientPerson, orgId, 'client-a@test.example', 'Client A',
+    ]);
+    await pool.query(
+      `INSERT INTO role_binding (person_id, role, scope_type, scope_id) VALUES ($1,'client_approver','engagement',$2)`,
+      [clientPerson, engA],
+    );
+    const clientDashList = await api(base, '/dashboards', { email: 'client-a@test.example' });
+    check('client sees no account-manager dashboard', Array.isArray(clientDashList.json) && (clientDashList.json as unknown[]).length === 0);
+
+    const clientDash = await api(base, '/dashboards', {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Client A view', scopeRole: 'client', engagementId: engA, widgets: ['capacity_kpi'] },
+    });
+    const clientDashId = (clientDash.json as { id: string }).id;
+    const clientRenders = await api(base, `/dashboards/${clientDashId}`, { email: 'client-a@test.example' });
+    check('client renders its own engagement dashboard', clientRenders.status === 200);
+
+    // A client from another engagement is refused.
+    const clientBPerson = randomUUID();
+    await pool.query('INSERT INTO person (id, org_id, email, name) VALUES ($1,$2,$3,$4)', [
+      clientBPerson, orgId, 'client-b@test.example', 'Client B',
+    ]);
+    await pool.query(
+      `INSERT INTO role_binding (person_id, role, scope_type, scope_id) VALUES ($1,'client_approver','engagement',$2)`,
+      [clientBPerson, engB],
+    );
+    const clientBCross = await api(base, `/dashboards/${clientDashId}`, { email: 'client-b@test.example' });
+    check('client from another engagement refused dashboard', clientBCross.status === 403);
+
+    console.log('\n-- V2: communication visibility boundary (§11.2)');
+
+    const internalChannel = await api(base, '/comms/channels', {
+      email: 'lead@test.example', method: 'POST',
+      body: { name: 'Internal production', visibility: 'internal', engagementId: engA },
+    });
+    const internalChannelId = (internalChannel.json as { id: string }).id;
+    check('internal channel created', internalChannel.status === 201);
+
+    const externalsSeeInternal = await api(base, '/comms/channels', { email: 'client-a@test.example' });
+    check('client never sees an internal channel', Array.isArray(externalsSeeInternal.json) && (externalsSeeInternal.json as unknown[]).length === 0);
+
+    const clientPostsToInternal = await api(base, `/comms/channels/${internalChannelId}/messages`, {
+      email: 'client-a@test.example', method: 'POST', body: { body: 'sneaking in' },
+    });
+    check('client cannot post to an internal channel (403)', clientPostsToInternal.status === 403);
+
+    const externalChannel = await api(base, '/comms/channels', {
+      email: 'lead@test.example', method: 'POST',
+      body: { name: 'Client A updates', visibility: 'external', engagementId: engA, memberIds: [clientPerson] },
+    });
+    const externalChannelId = (externalChannel.json as { id: string }).id;
+    check('external channel created', externalChannel.status === 201);
+
+    const rootMessage = await api(base, `/comms/channels/${externalChannelId}/messages`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { body: 'First cut is ready', mentions: [clientPerson] },
+    });
+    const rootMessageId = (rootMessage.json as { id: string }).id;
+    check('message posted to external channel', rootMessage.status === 201);
+
+    const mentionNotif = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM notification WHERE recipient_id = $1 AND kind = 'mention'`,
+      [clientPerson],
+    );
+    check('@mention raised an elevated notification', Number(mentionNotif.rows[0].n) >= 1);
+
+    const threadReply = await api(base, `/comms/channels/${externalChannelId}/messages`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { body: 'And the alt cut', parentMessageId: rootMessageId },
+    });
+    check('threaded reply accepted', threadReply.status === 201);
+
+    const wrongThread = await api(base, `/comms/channels/${internalChannelId}/messages`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { body: 'mismatched parent', parentMessageId: rootMessageId },
+    });
+    check('reply with a foreign parent message rejected', wrongThread.status === 400);
+
+    const clientReadsExternal = await api(base, `/comms/channels/${externalChannelId}/messages`, { email: 'client-a@test.example' });
+    check('client reads the external channel', clientReadsExternal.status === 200);
+
+    // Internal→external is an explicit, reasoned, audited action.
+    const convertNoReason = await api(base, `/comms/channels/${internalChannelId}/convert-external`, {
+      email: 'lead@test.example', method: 'POST', body: { reason: '' },
+    });
+    check('conversion without a reason rejected', convertNoReason.status === 400);
+
+    const convert = await api(base, `/comms/channels/${internalChannelId}/convert-external`, {
+      email: 'lead@test.example', method: 'POST', body: { reason: 'Client needs to see this thread' },
+    });
+    check('explicit conversion to external succeeds', convert.status === 201);
+    const convertAudit = await pool.query<{ action: string }>(
+      `SELECT action FROM audit_event WHERE action = 'channel.converted_external' AND target_id = $1`,
+      [internalChannelId],
+    );
+    check('conversion is audited', convertAudit.rows.length === 1);
+
+    console.log('\n-- V2: meetings record attendance honestly (§11.4)');
+
+    const badMeeting = await api(base, '/comms/meetings', {
+      email: 'lead@test.example', method: 'POST',
+      body: { title: 'No room', startsAt: new Date(Date.now() + 3600_000).toISOString() },
+    });
+    check('meeting without a room or link rejected', badMeeting.status === 400);
+
+    const v2Meeting = await api(base, '/comms/meetings', {
+      email: 'lead@test.example', method: 'POST',
+      body: {
+        title: 'Kickoff',
+        startsAt: new Date(Date.now() + 3600_000).toISOString(),
+        roomRef: 'jitsi-palette-kickoff',
+        engagementId: engA,
+        participantIds: [amId],
+      },
+    });
+    const meetingId = (v2Meeting.json as { id: string }).id;
+    check('meeting scheduled', v2Meeting.status === 201);
+
+    const invitedRow = await pool.query<{ joined_at: string | null }>(
+      'SELECT joined_at FROM meeting_participant WHERE meeting_id = $1 AND person_id = $2',
+      [meetingId, amId],
+    );
+    check('invited participant has not "attended"', invitedRow.rows[0]?.joined_at === null);
+
+    await api(base, `/comms/meetings/${meetingId}/join`, { email: 'am@test.example', method: 'POST' });
+    const joinedRow = await pool.query<{ joined_at: string | null }>(
+      'SELECT joined_at FROM meeting_participant WHERE meeting_id = $1 AND person_id = $2',
+      [meetingId, amId],
+    );
+    check('attendance recorded only on actual join', joinedRow.rows[0]?.joined_at !== null);
+
+    console.log('\n-- V2: files/DAM version chain (§13)');
+
+    const fileV1 = await api(base, '/files', {
+      email: 'lead@test.example', method: 'POST',
+      body: { name: 'hero-shot.png', content: 'v1-bytes', contentType: 'image/png', engagementId: engA, metadata: { license: 'CC0' } },
+    });
+    const fileV1Id = (fileV1.json as { id: string }).id;
+    check('file uploaded (native source)', fileV1.status === 201);
+
+    const fileV2 = await api(base, '/files', {
+      email: 'lead@test.example', method: 'POST',
+      body: { name: 'hero-shot.png', content: 'v2-bytes-longer', contentType: 'image/png', supersedes: fileV1Id, source: 'adobe_plugin', externalRef: 'adobe-77' },
+    });
+    check('re-upload creates version 2', fileV2.status === 201 && (fileV2.json as { version_number: number }).version_number === 2);
+
+    const v2Chain = await api(base, `/files/${fileV1Id}/versions`, { email: 'lead@test.example' });
+    check('version chain returns both versions', Array.isArray(v2Chain.json) && (v2Chain.json as unknown[]).length === 2);
+
+    const badSource = await api(base, '/files', {
+      email: 'lead@test.example', method: 'POST', body: { name: 'x.png', source: 'floppy_disk' },
+    });
+    check('unknown file source rejected 400', badSource.status === 400);
+
+    const v2Attach = await api(base, `/files/items/${v2ItemAId}/attach`, {
+      email: 'lead@test.example', method: 'POST', body: { fileId: fileV1Id, columnId: hoursColId },
+    });
+    check('file attached to an item column', v2Attach.status === 201, `status=${v2Attach.status} body=${JSON.stringify(v2Attach.json)}`);
+
+    const attached = await api(base, `/files/items/${v2ItemAId}`, { email: 'lead@test.example' });
+    check('attached files read back', Array.isArray(attached.json) && (attached.json as unknown[]).length === 1);
+
+    const guestListsFiles = await api(base, '/files', { email: 'guest@acme.example' });
+    check('guest cannot list files (403)', guestListsFiles.status === 403);
+
+    console.log('\n-- V2: AI agents propose, humans decide (§12)');
+
+    const catalogRes = await api(base, '/agents', { email: 'lead@test.example' });
+    const catalogBody = catalogRes.json as {
+      provider: { name: string; configured: boolean };
+      agents: Array<{ key: string; autonomy: string; requiresApproval: boolean }>;
+    };
+    const v2Agents = catalogBody.agents;
+    check('agent catalog exposes six agents', v2Agents.length === 6);
+    check('agent catalog declares autonomy levels', v2Agents.every((a) => Boolean(a.autonomy)));
+    check('only the reminder agent skips approval', v2Agents.filter((a) => !a.requiresApproval).map((a) => a.key).join(',') === 'kpi_reminder');
+    // §12.3/§12.5 — no LLM key in the test env means the seam degrades to a
+    // no-op rather than failing; the catalog reports that state honestly.
+    check('LLM seam reports unconfigured without env keys', catalogBody.provider.configured === false && catalogBody.provider.name === 'none');
+
+    const analysis = await api(base, '/agents/brief_analysis/run', {
+      email: 'lead@test.example', method: 'POST',
+      body: { itemId: v2ItemAId, payload: { missingFields: ['budget', 'deadline'], baseHours: 20 } },
+    });
+    const analysisRun = analysis.json as { id: string; status: string; proposal: { estimatedHoursRange: { low: number; high: number } } };
+    check('propose-only agent records a proposal, does not apply', analysis.status === 201 && analysisRun.status === 'proposed');
+    check('proposal carries an hour range for a human to confirm', analysisRun.proposal.estimatedHoursRange.low === 16 && analysisRun.proposal.estimatedHoursRange.high === 25);
+
+    const v2Confirmed = await api(base, `/agents/runs/${analysisRun.id}/decide`, {
+      email: 'ops@test.example', method: 'POST', body: { decision: 'confirmed' },
+    });
+    check('human confirms the proposal', v2Confirmed.status === 201 && (v2Confirmed.json as { status: string }).status === 'confirmed');
+
+    const doubleDecide = await api(base, `/agents/runs/${analysisRun.id}/decide`, {
+      email: 'ops@test.example', method: 'POST', body: { decision: 'rejected' },
+    });
+    check('a decided proposal cannot be re-decided', doubleDecide.status === 404);
+
+    const v2Reminder = await api(base, '/agents/kpi_reminder/run', {
+      email: 'lead@test.example', method: 'POST',
+      body: { itemId: v2ItemAId, payload: { message: 'Review is overdue' } },
+    });
+    check('act-and-log reminder applies without approval', v2Reminder.status === 201 && (v2Reminder.json as { status: string }).status === 'applied');
+
+    const reminderNotif = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM notification WHERE kind = 'agent_reminder' AND recipient_id = $1`,
+      [v2LeadId],
+    );
+    check('reminder raised a notification without mutating the item', Number(reminderNotif.rows[0].n) >= 1);
+
+    const unknownAgent = await api(base, '/agents/launch_missiles/run', {
+      email: 'lead@test.example', method: 'POST', body: {},
+    });
+    check('unknown agent rejected 400', unknownAgent.status === 400);
+
+    const guestRunsAgent = await api(base, '/agents/brief_analysis/run', {
+      email: 'guest@acme.example', method: 'POST', body: { itemId: v2ItemAId, payload: {} },
+    });
+    check('guest cannot run agents (403)', guestRunsAgent.status === 403);
+
+    // Every agent action is on the audit trail (§12.6).
+    const agentAudit = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM audit_event WHERE action IN ('agent.ran','agent.confirmed')`,
+    );
+    check('agent runs and decisions are audited', Number(agentAudit.rows[0].n) >= 3);
+
+    /* ---------------- */
+
+    console.log('\n-- V2: view configuration (§9.5)');
+
+    const kanbanNoConfig = await api(base, `/boards/${boardAId}/views`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'Board', viewType: 'kanban' },
+    });
+    check('kanban view without group_by_column_id rejected', kanbanNoConfig.status === 400);
+
+    const kanban = await api(base, `/boards/${boardAId}/views`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Pipeline board', viewType: 'kanban', config: { group_by_column_id: statusColId }, isDefault: true },
+    });
+    check('kanban view configured', kanban.status === 201);
+
+    const gallery = await api(base, `/boards/${boardAId}/views`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Reference gallery', viewType: 'gallery', config: { files_column_id: hoursColId } },
+    });
+    check('gallery view configured', gallery.status === 201);
+
+    const badViewType = await api(base, `/boards/${boardAId}/views`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'Hologram', viewType: 'hologram' },
+    });
+    check('unknown view type rejected', badViewType.status === 400);
+
+    console.log('\n-- V2: board cloning carries semantic roles (§10.2)');
+
+    const v2Clone = await api(base, '/boards', {
+      email: 'am@test.example', method: 'POST',
+      body: { workspaceId: wsAId, name: 'Pipeline template', isTemplate: true },
+    });
+    const v2TemplateId = (v2Clone.json as { id: string }).id;
+    const cloner = await api(base, '/boards', {
+      email: 'am@test.example', method: 'POST',
+      body: { workspaceId: wsAId, name: 'Engagement B pipeline', clonedFrom: v2TemplateId },
+    });
+    check('board cloned from template', cloner.status === 201);
+
+    const clonedDetail = await api(base, `/boards/${(cloner.json as { id: string }).id}`, { email: 'am@test.example' });
+    check('cloned board is empty of items but keeps structure', (clonedDetail.json as { items: unknown[] }).items.length === 0);
+
+    // Semantic role survives the v2Clone only when it was present on the source.
+    await api(base, `/boards/${v2TemplateId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Revenue', columnType: 'number', semanticRole: 'revenue_value' },
+    });
+    const cloner2 = await api(base, '/boards', {
+      email: 'am@test.example', method: 'POST',
+      body: { workspaceId: wsAId, name: 'Clone with role', clonedFrom: v2TemplateId },
+    });
+    const clonedCols = await api(base, `/boards/${(cloner2.json as { id: string }).id}`, { email: 'am@test.example' });
+    const clonedRoles = (clonedCols.json as { columns: Array<{ semantic_role: string | null }> }).columns
+      .map((c) => c.semantic_role)
+      .filter(Boolean);
+    check('cloning carries semantic roles forward', clonedRoles.includes('revenue_value'));
   } finally {
     await app.close();
     await pool.end();

@@ -6,6 +6,14 @@ import {
   Capability,
   can,
   capabilitiesOf,
+  SEAT_MODEL,
+  seatUtilisationPct,
+  COLUMN_TYPES,
+  SEMANTIC_ROLES,
+  QA_GATE_ROLES,
+  SYSTEM_COLUMN_TYPES,
+  AGENT_CATALOG,
+  AgentAutonomy,
 } from '../src';
 
 function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
@@ -69,10 +77,107 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
 }
 {
   const caps = capabilitiesOf([Role.ClientApprover]);
-  if (caps.length !== 9 || !caps.includes(Capability.CommentsWrite) ||
+  if (!caps.includes(Capability.CommentsWrite) ||
       !caps.includes(Capability.NotificationsRead) || !caps.includes(Capability.ApprovalsDecide) ||
       !caps.includes(Capability.DeliverablesRead)) {
     throw new Error('client approver has projects.read + deliverables.read + comments.write + notifications.read + approvals.decide');
+  }
+  // V2 §14.3: Client reads boards/items/dashboards/files for its own
+  // engagement and writes on external channels only.
+  if (!caps.includes(Capability.BoardsRead) || !caps.includes(Capability.ItemsRead) ||
+      !caps.includes(Capability.DashboardsRead) || !caps.includes(Capability.FilesRead) ||
+      !caps.includes(Capability.ChannelsWrite)) {
+    throw new Error('client approver gains V2 board/dashboard/channel read access (§14.3)');
+  }
+  // Client is never given structural write on boards or items.
+  if (caps.includes(Capability.BoardsWrite) || caps.includes(Capability.ItemsWrite) ||
+      caps.includes(Capability.DashboardsManage)) {
+    throw new Error('client approver must not hold structural write (boards/items/dashboards)');
+  }
+}
+{
+  // V2 §14.3: Guest is the narrowest tier — comment on and meet about the one
+  // scoped item, read it, and nothing structural.
+  const caps = capabilitiesOf([Role.Guest]);
+  if (!caps.includes(Capability.CommentsWrite) || !caps.includes(Capability.MeetingsWrite) ||
+      !caps.includes(Capability.DeliverablesRead)) {
+    throw new Error('guest may comment on and meet about its scoped item');
+  }
+  if (caps.includes(Capability.BoardsRead) || caps.includes(Capability.ItemsRead) ||
+      caps.includes(Capability.ItemsWrite) || caps.includes(Capability.BoardsWrite) ||
+      caps.includes(Capability.CommercialRead) || caps.includes(Capability.CapacityRead) ||
+      caps.includes(Capability.FilesWrite)) {
+    throw new Error('guest must not see boards, capacity, commercial or write files');
+  }
+}
+{
+  // V2 §14.3 explicit callout: Management is read-only on working content —
+  // full oversight of channels/files, but never editing them.
+  const caps = capabilitiesOf([Role.OperationsDirector]);
+  if (!caps.includes(Capability.ChannelsRead) || !caps.includes(Capability.FilesRead)) {
+    throw new Error('management reads communication + files for oversight');
+  }
+  if (caps.includes(Capability.ChannelsWrite) || caps.includes(Capability.FilesWrite)) {
+    throw new Error('management must not write partner channels or designer files (§14.3)');
+  }
+  if (!caps.includes(Capability.BoardsManage) || !caps.includes(Capability.DashboardsManage) ||
+      !caps.includes(Capability.CapacityWrite)) {
+    throw new Error('management write access is confined to structural/administrative resources');
+  }
+}
+{
+  // V2 §7.7 seat model: the benchmarked figures must reconcile.
+  const { rawMonthlyHours, nonBillablePct, productiveMonthlyHours } = SEAT_MODEL;
+  const derived = rawMonthlyHours * (1 - nonBillablePct);
+  if (Math.abs(derived - productiveMonthlyHours) > 0.05) {
+    throw new Error(`seat model does not reconcile: ${derived} != ${productiveMonthlyHours}`);
+  }
+  const pct = seatUtilisationPct(137.1);
+  if (pct !== 100) {
+    throw new Error(`137.1 productive hours must read as 100% utilisation, got ${pct}`);
+  }
+  if (seatUtilisationPct(68.55) !== 50) {
+    throw new Error('half the productive ceiling must read as 50% utilisation');
+  }
+  if (seatUtilisationPct(0) !== 0) {
+    throw new Error('zero logged hours must read as 0% utilisation');
+  }
+  if (SEAT_MODEL.accountManagerSeats !== 12) {
+    throw new Error('account manager bounded-broad ratio must be 12 seats');
+  }
+}
+{
+  // V2 §9.4/§10.2 vocabulary shapes.
+  if (COLUMN_TYPES.length !== 25) {
+    throw new Error(`column type catalog must hold 25 types, got ${COLUMN_TYPES.length}`);
+  }
+  if (SEMANTIC_ROLES.length !== 9) {
+    throw new Error(`semantic role vocabulary must hold 9 roles, got ${SEMANTIC_ROLES.length}`);
+  }
+  if (QA_GATE_ROLES.length !== 3) {
+    throw new Error('QA gate is exactly three checks (brand/brief/technical)');
+  }
+  if (SYSTEM_COLUMN_TYPES.length !== 2) {
+    throw new Error('creation_log + last_updated are the only system columns');
+  }
+}
+{
+  // V2 §12.2: no agent is ever the final word on quality or compliance.
+  if (AGENT_CATALOG.length !== 6) {
+    throw new Error(`agent catalog must hold 6 agents, got ${AGENT_CATALOG.length}`);
+  }
+  if (!AGENT_CATALOG.every((a) => a.key && a.name && a.autonomy)) {
+    throw new Error('every agent declares a key, name and autonomy level');
+  }
+  // Only the reminder agent may act without approval; the guard blocks but
+  // cannot itself approve.
+  const noApproval = AGENT_CATALOG.filter((a) => !a.requiresApproval).map((a) => a.key);
+  if (noApproval.length !== 1 || noApproval[0] !== 'kpi_reminder') {
+    throw new Error('only the act-and-log reminder agent skips human approval');
+  }
+  const guard = AGENT_CATALOG.find((a) => a.key === 'white_label_guard');
+  if (!guard || guard.autonomy !== AgentAutonomy.BlockAndFlag) {
+    throw new Error('the White-Label Compliance Guard is block-and-flag');
   }
 }
 

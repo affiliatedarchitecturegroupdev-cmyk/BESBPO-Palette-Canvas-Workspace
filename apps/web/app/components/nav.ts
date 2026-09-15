@@ -26,7 +26,7 @@ export const NAV_SECTIONS: NavSection[] = [
     id: 'operate',
     title: 'Operate',
     items: [
-      { href: '/', label: 'Overview', shortLabel: 'Home', exact: true },
+      { href: '/dashboard', label: 'Overview', shortLabel: 'Home', exact: true },
       { href: '/intake', label: 'Intake inbox', capability: 'intake.read' },
       { href: '/projects', label: 'Projects', capability: 'projects.read' },
       { href: '/calendar', label: 'Calendar' },
@@ -89,4 +89,15 @@ export function isNavActive(item: Pick<NavItem, 'href' | 'exact'>, pathname: str
 /** Capability-based visibility: undefined capability means always visible. */
 export function visibleNavItem(item: NavItem, has: (cap: string) => boolean): boolean {
   return item.capability ? has(item.capability) : true;
+}
+
+/**
+ * Public-surface routes render without the application chrome (spec §8, §15).
+ * Kept here so the shell and any future landing-page routing agree on one list.
+ */
+export const PUBLIC_PATHS = ['/', '/legal', '/resources', '/signup'] as const;
+
+export function isPublicPath(pathname: string): boolean {
+  if (pathname === '/') return true;
+  return PUBLIC_PATHS.some((p) => p !== '/' && pathname.startsWith(p));
 }

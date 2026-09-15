@@ -2,8 +2,10 @@
 /**
  * B-04 drift detection. Compares the roadmap ledger to the repository rules:
  *  1. every `done` row must carry a merge reference (PR #n) and evidence;
- *  2. every `todo` row must have no commit reference;
- *  3. AGENTS.md must still state the branch+PR gate (never commit to main).
+ *  2. every `in-review` row must carry a branch/PR reference and evidence
+ *     (work is complete but not yet merged — the human merge gate is pending);
+ *  3. every `todo` row must have no commit reference;
+ *  4. AGENTS.md must still state the branch+PR gate (never commit to main).
  * Writes a dated report to ops/drift/latest.md and exits 1 on drift.
  */
 const fs = require('fs');
@@ -14,7 +16,7 @@ const ledger = fs.readFileSync(path.join(root, 'docs/roadmap-ledger.md'), 'utf8'
 const agents = fs.readFileSync(path.join(root, 'AGENTS.md'), 'utf8');
 
 const findings = [];
-const rows = ledger.split('\n').filter((l) => /^\| (P|B)[\d-]/.test(l));
+const rows = ledger.split('\n').filter((l) => /^\| (P|B|V2|A|UI)[\d\-.\u2013]/.test(l));
 for (const line of rows) {
   const cells = line.split('|').map((c) => c.trim());
   const [id, , status, commit, evidence] = cells.slice(1);
@@ -24,6 +26,11 @@ for (const line of rows) {
       findings.push(`${id}: done but no merge reference (${commit})`);
     }
     if (!evidence || evidence === '—') findings.push(`${id}: done but no evidence recorded`);
+  } else if (status === 'in-review') {
+    // Work is complete on a branch but the human merge gate has not been passed
+    // yet, so a branch name (or PR) is the correct reference, not a merge.
+    if (!commit || commit === '—') findings.push(`${id}: in-review but no branch/PR reference`);
+    if (!evidence || evidence === '—') findings.push(`${id}: in-review but no evidence recorded`);
   } else if (status === 'todo') {
     if (commit !== '—') findings.push(`${id}: todo but has commit reference (${commit})`);
   } else {
