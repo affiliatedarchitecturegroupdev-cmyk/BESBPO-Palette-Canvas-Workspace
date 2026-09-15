@@ -49,6 +49,15 @@ jobs:
       - name: Run tests (shared permission tests + API e2e against Postgres)
         run: npm test
 
+      - name: Public surface check (landing + legal + resources routes)
+        run: |
+          PC_API_URL=http://localhost:3001 PORT=3000 npm run start -w @palette-canvas/web &
+          for i in $(seq 1 30); do
+            curl -sf -o /dev/null http://localhost:3000/ && break
+            sleep 2
+          done
+          bash scripts/public-surface-check.sh http://localhost:3000
+
       - name: LoC report
         run: bash scripts/loc.sh
 

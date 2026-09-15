@@ -198,6 +198,18 @@ pre {
   animation: pc-scale-in 220ms ease both;
 }
 
+/* ---------- Public surface (landing, legal, resources) ---------- */
+.pc-public-link {
+  transition: color 140ms ease;
+}
+.pc-public-link:hover,
+.pc-public-link:focus-visible {
+  color: var(--ink) !important;
+}
+.pc-legal-prose a {
+  color: var(--accent);
+}
+
 /* ---------- AppShell responsive behaviour ---------- */
 /* Desktop ≥1024px: show sidebar; hide mobile toolbar */
 @media (min-width: 1024px) {

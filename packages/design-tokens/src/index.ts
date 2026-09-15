@@ -117,6 +117,25 @@ export const shadow = {
   glow: '0 0 0 1px rgba(79, 125, 255, 0.35), 0 0 24px rgba(79, 125, 255, 0.18)',
 } as const;
 
+/**
+ * V2 spec §8.1 — the public-surface ramp from the landing mockup. The gradient
+ * runs cobalt → violet → magenta across the hero and the multi-dot mark. Kept
+ * separate from the app `color` scales so the marketing surface can evolve
+ * without touching product semantics.
+ */
+export const brandRamp = {
+  cobalt: '#4f7dff',
+  violet: '#9471cb',
+  magenta: '#d66599',
+  gradient: 'linear-gradient(90deg, #4f7dff 0%, #9471cb 50%, #d66599 100%)',
+  /** The landing/marketing ink, per the mockup (distinct from app `base`). */
+  ink: '#131021',
+  raise: '#1c1830',
+} as const;
+
+/** Multi-stop dot mark used beside the wordmark on the public surface. */
+export const brandDots = [brandRamp.cobalt, brandRamp.violet, brandRamp.magenta] as const;
+
 /** Status semantic → tone key. Imported by Badge/StatusDot components. */
 export const STATUS_TONE: Record<string, string> = {
   inbox: 'info',

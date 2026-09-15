@@ -83,6 +83,18 @@ import { TemplateSchemasController } from './template-schemas/template-schemas.c
 import { TemplateSchemasService } from './template-schemas/template-schemas.service';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
+import { BoardsController } from './boards/boards.controller';
+import { BoardsService } from './boards/boards.service';
+import { ComplianceService } from './compliance/compliance.service';
+import { DashboardsController } from './dashboards/dashboards.controller';
+import { DashboardsService } from './dashboards/dashboards.service';
+import { CommsController } from './comms/comms.controller';
+import { CommsService } from './comms/comms.service';
+import { FilesController } from './files/files.controller';
+import { FilesService } from './files/files.service';
+import { AgentsController } from './agents/agents.controller';
+import { AgentsService } from './agents/agents.service';
+import { createLlmProvider, LlmProvider } from './llm/llm.provider';
 
 @Module({
   imports: [SecurityModule],
@@ -126,6 +138,11 @@ import { AuthService } from './auth/auth.service';
     RiskController,
     TemplateSchemasController,
     AuthController,
+    BoardsController,
+    DashboardsController,
+    CommsController,
+    FilesController,
+    AgentsController,
   ],
   providers: [
     Database,
@@ -171,6 +188,13 @@ import { AuthService } from './auth/auth.service';
     RiskService,
     TemplateSchemasService,
     AuthService,
+    BoardsService,
+    ComplianceService,
+    DashboardsService,
+    CommsService,
+    FilesService,
+    AgentsService,
+    { provide: LlmProvider, useFactory: () => createLlmProvider() },
   ],
 })
 export class AppModule implements NestModule {
