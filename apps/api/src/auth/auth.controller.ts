@@ -1,4 +1,14 @@
-import { BadRequestException, Body, Controller, Get, Headers, HttpCode, Post, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Post,
+  Res,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService, LoginInput, SignupInput } from './auth.service';
 import {
   SESSION_COOKIE,
@@ -54,6 +64,68 @@ export class AuthController {
     if (!body.token) throw new BadRequestException('token required');
     const { orgId, personId } = await this.auth.verifyEmail(body.token);
     return { verified: true, orgId, personId };
+  }
+
+  /**
+   * Re-send a verification link (A-02). Responds 200 with `sent: false` for an
+   * unknown or already-verified address so the endpoint does not disclose which
+   * accounts exist; `throttled: true` tells a legitimate client to wait.
+   */
+  @Post('verify/resend')
+  @HttpCode(200)
+  async resendVerification(@Body() body: { email: string }) {
+    if (!body.email) throw new BadRequestException('email required');
+    return this.auth.resendVerification(body.email);
+  }
+
+  /** Start a password reset (A-03). Always 200, for the same reason. */
+  @Post('password/reset/request')
+  @HttpCode(200)
+  async requestReset(@Body() body: { email: string }) {
+    if (!body.email) throw new BadRequestException('email required');
+    await this.auth.requestPasswordReset(body.email);
+    return { ok: true, message: 'if that address exists, a reset link has been sent' };
+  }
+
+  @Post('password/reset')
+  @HttpCode(200)
+  async resetPassword(@Body() body: { token: string; password: string; confirmPassword?: string }) {
+    if (!body.token) throw new BadRequestException('token required');
+    if (body.password !== body.confirmPassword) {
+      throw new BadRequestException('passwords do not match');
+    }
+    const { personId } = await this.auth.resetPassword(body.token, body.password ?? '');
+    return { ok: true, personId };
+  }
+
+  /** Change a password from a live session (A-03). */
+  @Post('password/change')
+  @HttpCode(200)
+  async changePassword(
+    @Body() body: { currentPassword: string; password: string; confirmPassword?: string },
+    @Headers('cookie') cookie: string | undefined,
+  ) {
+    if (body.password !== body.confirmPassword) {
+      throw new BadRequestException('passwords do not match');
+    }
+    const token = parseCookies(cookie)[SESSION_COOKIE];
+    const result = await this.auth.changePassword(
+      token,
+      body.currentPassword ?? '',
+      body.password ?? '',
+    );
+    return { ok: true, ...result };
+  }
+
+  /** Revoke all other sessions for the current person (A-03). */
+  @Post('sessions/revoke')
+  @HttpCode(200)
+  async revokeSessions(@Headers('cookie') cookie: string | undefined) {
+    const token = parseCookies(cookie)[SESSION_COOKIE];
+    const resolved = await this.auth.resolveSession(token);
+    if (!resolved) throw new UnauthorizedException('not authenticated');
+    const revoked = await this.auth.revokeSessions(resolved.person.id, token);
+    return { ok: true, revoked };
   }
 
   @Post('login')

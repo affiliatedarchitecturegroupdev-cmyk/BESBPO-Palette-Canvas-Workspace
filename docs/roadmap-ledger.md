@@ -71,9 +71,9 @@ who (or which agent) did it, and what remains. For scope definitions see
 | P8-14 | Comment visibility tagging | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `comment.visibility` + controller role filter |
 | P8-15 | Service-template task-field schema | done | PR #18 | e2e invite accept + revoke + negative; root build exit 0; e2e 212/212 | `template-schemas` module |
 | A-01 | AuthN core + sign-up/org bootstrap | done | PR #20 | e2e 239/239 (27 new auth checks); root build clean; drift 0 findings | migration 009: `organisation` upgrade (slug/owner/plan/trial), argon2id via `@node-rs/argon2`, httpOnly sessions, `POST /auth/signup` + `/auth/verify` + `/auth/login` + `/auth/logout` + `/auth/session` |
-| A-02 | Email verification + login/session | todo | — | — | depends A-01 + email transport (§0.2) |
-| A-03 | Password reset/change + revocation | todo | — | — | depends A-02 |
-| A-04 | Invite/member/roles admin | todo | — | — | supersedes P8-01 UI; depends A-02 |
+| A-02 | Email verification + login/session | in-review | branch `n1-email-transport-auth-chain` | e2e: unverified login 403, reuse 410, expired token 410, resend throttle, unknown-address non-disclosure; 354/354 | N1.2; delivery step still awaits the §0.2 provider decision (ADR-0002 D1) — the flow is complete and green against the outbox fallback |
+| A-03 | Password reset/change + revocation | in-review | branch `n1-email-transport-auth-chain` | e2e: reset round-trip, weak 400, reuse/expired 410, unknown 401, sessions revoked, change-password keeps caller, revoke-others; 354/354 | N1.3; all paths audited |
+| A-04 | Invite/member/roles admin | in-review | branch `n1-email-transport-auth-chain` | e2e: accept produced the promised binding; reuse 409; members list scoped to org; client cannot list members 403; self-revoke 403; pending invite revoke makes the token unusable 409; member revoke drops bindings + workspace access 403; revocation audited; 365 passed / 0 failed. Browser: `/settings/members` renders members + pending invites for `operations_director`, and shows a restricted notice (not an empty list) for a `creative_contributor` | N1.4; supersedes P8-01 UI. `GET /directory/members` + `DELETE /directory/members/:personId/roles`; the self-revoke guard exists because an admin who revokes themselves leaves the org with no administrator and no product path back |
 | A-05 | MFA policy enforcement + session hardening | todo | — | — | depends A-02 |
 | A-06 | Deactivation, export/delete, sessions manager, profile | todo | — | — | depends A-03 |
 | A-07 | Org/personal settings + email branding | todo | — | — | depends A-04 |
@@ -126,6 +126,11 @@ rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
 | SPA-03 | Legal pages rebuilt from the authoritative drafts (§15.1–15.3) | done | PR #24 | public-surface check asserts `WCAG 2.1 Level AA`, `POPIA`, `Render`, the real contact address, and the UK-data open item; a fabrication guard scans all three pages for `England and Wales` / `WCAG 2.2` / `United Kingdom` / `Governed by the laws of` and fails the gate if any reappears (verified by injecting a governing-law clause → gate failed) | PR #22 shipped invented content: a governing law of England and Wales, a UK data location, and a WCAG 2.2 target. Authoritative drafts say **WCAG 2.1 AA**, POPIA-first, and — per the user directive to ignore the AWS instruction — **Render** hosting rather than AWS `af-south-1`. The UK GDPR/POPIA question is carried as an explicit open item, not silently decided |
 | SPA-04 | Landing page aligned to §8.2 / `landing-page-mockup.html` | done | PR #24 | public-surface check asserts the six card titles (`Boards & views`, `Dashboards`, `Communication`, `AI agents`, `Compliance`, `Integrations`) plus `Intake to handover` / `How it works` / `Two ways in`; route 200; no app shell | §8.2 requires one card per core capability — exactly six. PR #22 shipped seven cards sized around generic marketing copy ("Every campaign…", "Know the floor…", "Agents propose…"). Meta description and `metadata.title` corrected from the app's internal wording to the public product positioning |
 | SPA-05 | Sign-up corrected to §8.3 and fonts to the mockup; resources made honest | done | PR #24 | public-surface check asserts the two requestable paths and the Guest boundary, and still asserts no guest self-serve statement is missing; build exit 0 | §8.3 is explicit that Guest has **no** sign-up path — PR #22 shipped three cards including a Guest one. Now two requestable paths plus an explicit Guest boundary. Poppins added as `--font-display` for the public surface (mockup uses Poppins/Inter/IBM Plex Mono; the app keeps Fraunces/Manrope). `contact.ts` centralises the package's real contact address. `scripts/public-surface-check.sh` also gained a `body_of` helper: its old `$(fetch A; fetch B; cat file)` idiom clobbered the shared temp file and silently checked one page twice — the reason the fabrications passed CI in the first place |
+| N1.1 | Email transport provider abstraction (§0.2) + dev outbox fallback | in-review | branch `n1-email-transport-auth-chain` | e2e: `/email/status` reports `transport: outbox`, `deliverable: false`; signup still succeeds; outbox row records `send_attempts`, `transport`, null `delivered_at`; 354 passed / 0 failed | `apps/api/src/email/{email.transport,email.service,email.controller}.ts`; `EmailTransport` is an abstract class so it doubles as the Nest token (the `LlmProvider` convention). Enqueue is transactional, dispatch is post-commit and never throws, so a mail outage cannot roll back a signup. SMTP selected by `PC_SMTP_HOST`/`PC_SMTP_FROM`; no provider chosen (human gate D1) |
+| N1.2 | A-02 verification + login/session hardening | in-review | branch `n1-email-transport-auth-chain` | e2e: unverified login **403** (was 401), reuse **410**, expired token **410**, unknown token **401**, resend throttled inside 60 s window, resend for unknown address does not disclose existence; 354 passed / 0 failed | Credential tokens now carry `expires_at` (24 h) — previously valid forever until consumed. Failure codes split deliberately: unknown 401 vs already-used/expired 410, so a user whose click already worked is not told their token is invalid |
+| N1.3 | A-03 password reset/change + session revocation, audited | in-review | branch `n1-email-transport-auth-chain` | e2e: reset round-trip, weak password 400, reuse 410, expired 410, unknown 401, pre-reset session revoked, no active sessions left behind, change-password wrong-current 401, changer's own session survives, revoke-others keeps caller, all audited; 354 passed / 0 failed | `consumed_at`/`email_outbox` single-use tokens; `person.password_changed_at` added; `revokeSessions(exceptToken?)` spared the caller's own session on change and revoked all on reset |
+| N1.4 | A-04 members/invites/roles admin surface | in-review | branch `n1-email-transport-auth-chain` | e2e: binding created on accept, invite reuse 409, pending-invite revoke → token 409, member revoke drops bindings, revoked member 403 on `/projects`, self-revoke 403, client 403 on member list, revocation audited; 365 passed / 0 failed. Browser: admin sees members + invites; non-admin sees a restricted notice | `GET /directory/members`, `DELETE /directory/members/:personId/roles`; `/settings/members` + `MemberActions.tsx`. Invite tokens are surfaced in the UI because there is still no mail transport (ADR-0002 D1) — an admin has to hand the token over manually |
+| N2.1 | Public-surface check moved into `npm test`; `body_of` clobbering documented | in-review | branch `n1-email-transport-auth-chain` | `npm test` now runs `test:public-surface` → `scripts/public-surface-gate.sh`, which boots the built app on an ephemeral port and rebuilds when sources are newer than `BUILD_ID`; negative-tested by removing `POPIA` from the privacy page → gate failed exit 1; green when restored; CI step for the standalone check removed as redundant | The check was a separate CI step nobody ran locally, which is how fabricated legal content reached `main`. Gate lives with the tests now, so a local `npm test` catches the same drift CI does |
 
 ## Recently completed detail
 
@@ -348,10 +353,16 @@ still genuinely open:
    integration health, and P8-11 an export log — all in PRs #12/#14/#18.** Open
    work is limited to third-party OAuth connectors (Adobe/Canva/Dropbox, §13.4)
    and import/export *fidelity* beyond the dry-run validator (A-12).
-5. **Identity hardening** — header auth remains, and it is now the keystone
-   gap: A-02 (real login/session) is code-complete but blocked on email
-   transport; A-03/A-04/A-05/A-10 all sit behind A-02. A decision on the
-   email provider is the single highest-leverage unblock available.
+5. **Identity hardening** — header auth remains, and the A-block still stacks
+   on it, but the top of the stack moved in N1: A-02 (verification +
+   login/session) and A-03 (reset/change + revocation) are now code-complete
+   and green on branch `n1-email-transport-auth-chain` (PR #25) against the outbox
+   fallback. What still gates real delivery is the email-provider decision
+   (`docs/decisions/ADR-0002.md` D1); A-04/A-05/A-10 sit behind A-02 but are no
+   longer blocked on code. Separately, `GET /identity/users` returns every
+   `person` row across **all** orgs to any caller — it is the documented
+   dev-mode switcher, not a product endpoint, so it is tracked as a
+   Phase-5-hardening item rather than fixed here.
 6. **Hosting region** — `render.yaml` exists with no region pinned. Every
    residency claim in §15.2 the privacy page is now tied to this decision (the
    page says Render and flags the UK question as open rather than asserting a
@@ -400,6 +411,45 @@ abstraction either way and records the decision in `docs/decisions/`.
 | N3.3 | A-12 public API versioning + importer apply (beyond the dry run) | P7-04, P8-11 | e2e: versioned key call; dry-run then apply |
 | N3.4 | A-16 observability + DR drill refresh; re-run the backup/restore and load drills against the current schema (they were last run at 55 e2e checks) | N3.1 | drill reports committed; p95 < 1000 ms |
 
+### Scoping notes for the next three slices (read before starting)
+
+Derived from reading the code, not just the plan — the gaps below are what the
+test shape in each row actually requires.
+
+**N1.4 — A-04 members admin.** The invite API is complete and tested
+(`apps/api/src/invites/*`, e2e "invites (P8-01)"); what is missing is the
+product surface and the directory side of it:
+- No web route renders members, pending invites, or role bindings. Add
+  `/settings/members` and link it from the settings hub (the `SettingLink`
+  pattern already there), plus a nav item gated on `invites.manage`.
+- `directory.service.ts` has agencies/brands/contacts but **no member listing**.
+  Add `listMembers(orgId)` joining `person` + `role_binding`; revoke needs a
+  binding-delete path that does not exist yet.
+- The e2e "invite→accept→binding, revoke, admin-only 403" shape is *partly*
+  covered already (create/list/accept/403-asserter exist). The genuinely new
+  assertions are: revoke makes the token unusable, and an accepted invite
+  actually produced the `role_binding` row.
+- Client-side mutations must follow `ProjectActions.tsx`: `'use client'`,
+  `fetch(`${apiUrl}/...`)` with the `x-user-email` header, `router.refresh()`.
+
+**N2.2 — A-14 board UI.** The API is broader than the UI:
+- `boards.service.ts` has no reorder/move operation and no global search.
+  DnD persistence needs a `PATCH` that moves an item between groups and rewrites
+  `position`; "global search" needs a cross-board item query. Both are API work
+  *before* any UI work, and both need their own e2e.
+- Existing UI is `apps/web/app/projects/[id]/BoardView.tsx` (204 lines) — a
+  read-oriented view. Extend it rather than starting a second board surface.
+- Timeline/Gantt and subtasks (`parent_item_id`) have no schema at all in
+  `010_v2_core_model.sql`; subtasks need a migration. Scope this slice honestly
+  as "board moves + search first", with timeline/subtasks as a follow-up, rather
+  than claiming all four in one PR.
+
+**N2.3 — V2 comms surface.** The API exists (`comms.controller.ts`, channels +
+`channel_members`, internal-visibility boundary already e2e-tested as
+"internal channel never visible to client"). This slice is mostly web routes;
+the risk is re-implementing the visibility filter client-side instead of relying
+on the server, which would be a security bug, not a UI bug.
+
 ### Explicitly deferred, and why
 
 - **A-09 billing (Stripe)** and **A-08 plan catalogue** — both sit behind the
@@ -416,8 +466,8 @@ abstraction either way and records the decision in `docs/decisions/`.
 
 | Gate | Target | Actual | Status |
 | --- | --- | --- | --- |
-| LoC | ≥ 80k (Phase 6 exit) | ~23k | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new |
-| e2e | ≥ 320 checks | 326 | met |
+| LoC | ≥ 80k (Phase 6 exit) | ~24.5k | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new |
+| e2e | ≥ 320 checks | 354 | met |
 | Permission tests | pass | pass | met |
 | Drift | 0 findings | 0 | met |
 

@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Headers, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, ForbiddenException, Get, Headers, Param, Post } from '@nestjs/common';
 import { Capability } from '@palette-canvas/shared';
 import { DirectoryService } from './directory.service';
 import { IdentityService } from '../identity/identity.service';
 import { AuthzService } from '../identity/authz.service';
+import { AuditService } from '../audit/audit.service';
 
 @Controller('directory')
 export class DirectoryController {
@@ -10,6 +11,7 @@ export class DirectoryController {
     private readonly directory: DirectoryService,
     private readonly identity: IdentityService,
     private readonly authz: AuthzService,
+    private readonly audit: AuditService,
   ) {}
 
   @Get('agencies')
@@ -62,5 +64,37 @@ export class DirectoryController {
     const ctx = await this.identity.resolve(email);
     this.authz.require(ctx, Capability.DirectoryManage);
     return this.directory.createContact(id, body.name, body.email, body.roleLabel);
+  }
+
+  /* ---------------- members (A-04) ---------------- */
+
+  @Get('members')
+  async members(@Headers('x-user-email') email: string | undefined) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.InvitesManage);
+    return this.directory.listMembers(ctx.orgId);
+  }
+
+  /**
+   * Revoke a member's org access by deleting every binding they hold here.
+   * Refuses to remove the caller's own bindings: an admin who revokes
+   * themselves locks the org out of its last administrator, and that is not a
+   * recoverable state through the product.
+   */
+  @Delete('members/:personId/roles')
+  async revokeMemberRoles(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('personId') personId: string,
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.InvitesManage);
+    if (personId === ctx.userId) {
+      throw new ForbiddenException('cannot revoke your own access');
+    }
+    const removed = await this.directory.removeBindings(ctx.orgId, personId);
+    await this.audit.log(ctx.orgId, ctx.userId, 'member.roles_revoked', 'person', personId, {
+      removed,
+    });
+    return { removed };
   }
 }
