@@ -10,6 +10,13 @@ Source of truth for what already exists: `docs/gap-analysis-spec-v2.md` (Phase 0
 Every step lists **scope → exit criteria → tests** and lands behind a PR with
 evidence per `AGENTS.md`.
 
+**Status: Phases 0-6 complete.** Phases 1-6 merged in PR #22
+(`v2-boards-comms-public-surface`, commit `ba22fda`); per-id evidence is in
+`docs/roadmap-ledger.md`. Two items remain human decisions and are *not* closed
+by that merge: the LLM provider host (§12.3 — the seam is built and no-ops
+without a key) and legal finalisation (§15 — pages are drafts carrying explicit
+counsel-review caveats). Frontend polish still awaits the asset zip.
+
 ---
 
 ## Phase 0 — Gap analysis ✅
@@ -27,7 +34,7 @@ as does Guest identity (§14.1) and the Communication layer (§11).
 
 ---
 
-## Phase 1 — Core data model + Guest identity
+## Phase 1 — Core data model + Guest identity ✅
 
 Built together, per §16.3: §14.4's guest RLS shape replaces §9.6's from day one.
 
@@ -44,7 +51,7 @@ Built together, per §16.3: §14.4's guest RLS shape replaces §9.6's from day o
 
 ---
 
-## Phase 2 — Files/DAM (§13)
+## Phase 2 — Files/DAM (§13) ✅
 
 | # | Scope | Exit criteria | Tests |
 | --- | --- | --- | --- |
@@ -56,7 +63,7 @@ Built together, per §16.3: §14.4's guest RLS shape replaces §9.6's from day o
 
 ---
 
-## Phase 3 — Communication layer (§11)
+## Phase 3 — Communication layer (§11) ✅
 
 | # | Scope | Exit criteria | Tests |
 | --- | --- | --- | --- |
@@ -70,7 +77,7 @@ Built together, per §16.3: §14.4's guest RLS shape replaces §9.6's from day o
 
 ---
 
-## Phase 4 — Cross-board dashboards (§10)
+## Phase 4 — Cross-board dashboards (§10) ✅
 
 | # | Scope | Exit criteria | Tests |
 | --- | --- | --- | --- |
@@ -84,7 +91,7 @@ Net-new 5,000–8,000.
 
 ---
 
-## Phase 5 — AI agent architecture (§12)
+## Phase 5 — AI agent architecture (§12) ✅
 
 | # | Scope | Exit criteria | Tests |
 | --- | --- | --- | --- |
@@ -99,7 +106,7 @@ Net-new 6,500–7,290.
 
 ---
 
-## Phase 6 — Landing + legal & resource pages (§8, §15)
+## Phase 6 — Landing + legal & resource pages (§8, §15) ✅
 
 Independent of Phases 1–5; good parallel-track work.
 

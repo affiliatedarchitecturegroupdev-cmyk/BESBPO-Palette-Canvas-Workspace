@@ -87,30 +87,30 @@ who (or which agent) did it, and what remains. For scope definitions see
 | A-15 | Mobile/PWA, whitelabel, widgets, L10N | todo | — | — | depends A-07, §9 |
 | A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | todo | — | — | continuous |
 | UI-01 | Web UI/UX advancement — scalable + mobile-first | done | PR #21 `c76d68c` | CI "Build + tests + gates" green on PR #21; root build exit 0; e2e 239/239; drift 0; LoC 18,039; browser QA on work-1 (dashboard, calendar, settings, help, reports, workload, capacity, commercial, projects, audit all render with seeded data); DataTable server-safe fix (no event handlers across AppShell client boundary) | new `/` dashboard (KPIs + intake attention + project pulse + dispatch), `/calendar` delivery timeline, `/settings` hub, `/help`; shared PageHeader/Badge/DataTable/StatCard/Card/ProgressBar/EmptyState; mobile-first CSS (stacked card rows, compact header, bottom quick-nav); `agentRules:false` |
-| V2-1.1 | Engagement entity + claims | in-review | `v2-boards-comms-public-surface` | e2e two engagements + cross-read blocked; build exit 0; e2e 326/326 | migration 010; `engagement_id` threaded through scope-bearing rows; `Me` carries resolved `engagementId` |
-| V2-1.2–1.4 | Board model, column catalog, semantic roles | in-review | `v2-boards-comms-public-surface` | e2e board/column/item lifecycle, type catalog reject 400, semantic role set + invalid reject; e2e 326/326 | migration 010 `workspaces`/`boards`/`columns`/`groups`/`items`/`board_views`; 25-type catalog with `config` validation |
-| V2-1.5 | Guest identity (§14.1/14.4) | in-review | `v2-boards-comms-public-surface` | e2e guest scoped read + expiry + guest 403 on list files; e2e 326/326 | `guest` role with `item_scope` + mandatory `expires_at`; resolved via `identity.service`; expired link denied |
-| V2-1.6 | Capacity bridge (§9.7/§7.7) | in-review | `v2-boards-comms-public-surface` | e2e seat utilisation from board `duration` items vs 137.1 productive ceiling | 173.6 raw / 137.1 productive / 21% non-billable constants |
-| V2-2.1 | `files` table + version chain (§13.1) | in-review | `v2-boards-comms-public-surface` | e2e upload → re-upload → version chain returns both; unknown source 400; e2e 326/326 | migration 011; `storage_key`, `source` enum, `external_ref`, `parent_file_id` |
-| V2-2.2 | File references (column + comment + message) | in-review | `v2-boards-comms-public-surface` | e2e attach to item column 201 + read back 1 row | `/files/items/:itemId/attach` |
-| V2-2.3 | Gallery view data (§9.5) | in-review | `v2-boards-comms-public-surface` | e2e gallery config resolves file rows | `files_column_id` config drives the grid |
-| V2-3.1–3.3 | Channels, visibility boundary, messages | in-review | `v2-boards-comms-public-surface` | e2e join + post, internal channel never visible to client, conversion audited, thread reply + mention; e2e 326/326 | migration 011 `channels`/`channel_members`; `visibility` fixed at creation |
-| V2-3.4 | Item comments + engagement RLS | in-review | `v2-boards-comms-public-surface` | comment inherits item access; e2e 326/326 | `engagement_id` denormalised onto comment |
-| V2-3.5 | Meetings (§11.4) | in-review | `v2-boards-comms-public-surface` | e2e schedule + join with honest `joined_at` | `meetings` + `meeting_participants` |
-| V2-4.1 | Dashboard schema (§10.3) | in-review | `v2-boards-comms-public-surface` | e2e widget CRUD; e2e 326/326 | migration 011 `dashboards`/`dashboard_widgets`/`dashboard_metrics` |
-| V2-4.2 | Aggregation consumer (§10.4) | in-review | `v2-boards-comms-public-surface` | e2e metric row written per tagged column on item write; no-op when untagged | `BoardsService` calls `DashboardsService` in create/update item |
-| V2-4.3 | Widget catalog (§10.6) | in-review | `v2-boards-comms-public-surface` | e2e pass-rate + capacity sum over metrics | capacity KPI, QA pass-rate, turnaround, engagement health, commercial rollup, leaderboard |
-| V2-4.4 | Role-scoped dashboards (§10.5) | in-review | `v2-boards-comms-public-surface` | e2e client renders own engagement dashboard; client from another engagement refused | management unfiltered; account-manager owns own engagements; client scoped to one |
-| V2-5.1 | Agent catalog (§12.2) | in-review | `v2-boards-comms-public-surface` | e2e catalog exposes six agents, every agent declares autonomy, only `kpi_reminder` skips approval | `AGENT_CATALOG` in `packages/shared` |
-| V2-5.2 | Compliance Guard (§12.5) | in-review | `v2-boards-comms-public-surface` | e2e failed check blocks `qa_technical`; clearing is attributed | `compliance_checks`; metadata/filename/attribution scan |
-| V2-5.3 | Brief Analysis Agent | in-review | `v2-boards-comms-public-surface` | e2e propose-only records a proposal (16–25 h range), does not apply; human confirm via `ai.review` (ops director) | set `propose-only`; storage blocked while org opted out |
-| V2-5.4 | KPI/Reminder Agent | in-review | `v2-boards-comms-public-surface` | e2e act-and-log reminder applies without approval, raises notification, does not mutate the item | `recipient_id` notification write |
-| V2-5.5 | LLM provider seam (§12.3) | in-review | `v2-boards-comms-public-surface` | e2e catalog reports provider unconfigured + name `none` without env keys; absent key is a graceful no-op | `apps/api/src/llm/llm.provider.ts`; OpenAI-compatible provider behind `PC_LLM_API_KEY`/`BASE_URL`/`MODEL`; provider choice is a human decision, left unconfigured |
-| V2-6.1 | Visual language (§8.1) | in-review | `v2-boards-comms-public-surface` | `packages/design-tokens/test/tokens.test.ts` snapshot passes and fails on drift (verified by injecting `#4a74ed` → `brandRamp.cobalt drifted`); sample of `fig-8.1-landing-mockup.png` confirms `#131021`/`#1c1830`/`#4f7dff`/`#9471cb`/`#d66599`; web build exit 0 | additive to `packages/design-tokens`; app scales untouched. Note: `docs/roadmap-spec-v2.md` had cited `#4a74ed`/`#706ed0`/`#c65e8f` for cobalt/violet/magenta — corrected against the mockup |
-| V2-6.2 | Landing page (§8.2) | in-review | `v2-boards-comms-public-surface` | public-surface check: all five sections present (`Every campaign`, `Built for the whole delivery`, `How it works`, `Two ways in`, `Follow along`); route 200; renders without the app shell | `/` moved to public landing; workspace overview moved to `/dashboard` |
-| V2-6.3 | Sign-up branching (§8.3) | in-review | `v2-boards-comms-public-surface` | public-surface check: three paths present (Employee / Partner agency / Client or third party) and the page states there is no guest self-serve | guest has no self-serve path by design |
-| V2-6.4 | Terms / Privacy / Accessibility (§15.1–15.3) | in-review | `v2-boards-comms-public-surface` | public-surface check: three routes 200 with spec content (terms incl. governing law; privacy incl. UK data location; accessibility incl. WCAG 2.2 target, known gaps, and an explicit not-yet-counsel-reviewed caveat) | explicit draft/legal-review caveats per roadmap rule "legal-finalisation is a human decision" |
-| V2-6.5 | Resources / What's New (§15.4) | in-review | `v2-boards-comms-public-surface` | public-surface check: status + in-development + recently-shipped sections present, incl. `Not configured` for the unconfigured agent provider | honest status rather than aspirational |
+| V2-1.1 | Engagement entity + claims | done | PR #22 | e2e two engagements + cross-read blocked; build exit 0; e2e 326/326 | migration 010; `engagement_id` threaded through scope-bearing rows; `Me` carries resolved `engagementId` |
+| V2-1.2–1.4 | Board model, column catalog, semantic roles | done | PR #22 | e2e board/column/item lifecycle, type catalog reject 400, semantic role set + invalid reject; e2e 326/326 | migration 010 `workspaces`/`boards`/`columns`/`groups`/`items`/`board_views`; 25-type catalog with `config` validation |
+| V2-1.5 | Guest identity (§14.1/14.4) | done | PR #22 | e2e guest scoped read + expiry + guest 403 on list files; e2e 326/326 | `guest` role with `item_scope` + mandatory `expires_at`; resolved via `identity.service`; expired link denied |
+| V2-1.6 | Capacity bridge (§9.7/§7.7) | done | PR #22 | e2e seat utilisation from board `duration` items vs 137.1 productive ceiling | 173.6 raw / 137.1 productive / 21% non-billable constants |
+| V2-2.1 | `files` table + version chain (§13.1) | done | PR #22 | e2e upload → re-upload → version chain returns both; unknown source 400; e2e 326/326 | migration 011; `storage_key`, `source` enum, `external_ref`, `parent_file_id` |
+| V2-2.2 | File references (column + comment + message) | done | PR #22 | e2e attach to item column 201 + read back 1 row | `/files/items/:itemId/attach` |
+| V2-2.3 | Gallery view data (§9.5) | done | PR #22 | e2e gallery config resolves file rows | `files_column_id` config drives the grid |
+| V2-3.1–3.3 | Channels, visibility boundary, messages | done | PR #22 | e2e join + post, internal channel never visible to client, conversion audited, thread reply + mention; e2e 326/326 | migration 011 `channels`/`channel_members`; `visibility` fixed at creation |
+| V2-3.4 | Item comments + engagement RLS | done | PR #22 | comment inherits item access; e2e 326/326 | `engagement_id` denormalised onto comment |
+| V2-3.5 | Meetings (§11.4) | done | PR #22 | e2e schedule + join with honest `joined_at` | `meetings` + `meeting_participants` |
+| V2-4.1 | Dashboard schema (§10.3) | done | PR #22 | e2e widget CRUD; e2e 326/326 | migration 011 `dashboards`/`dashboard_widgets`/`dashboard_metrics` |
+| V2-4.2 | Aggregation consumer (§10.4) | done | PR #22 | e2e metric row written per tagged column on item write; no-op when untagged | `BoardsService` calls `DashboardsService` in create/update item |
+| V2-4.3 | Widget catalog (§10.6) | done | PR #22 | e2e pass-rate + capacity sum over metrics | capacity KPI, QA pass-rate, turnaround, engagement health, commercial rollup, leaderboard |
+| V2-4.4 | Role-scoped dashboards (§10.5) | done | PR #22 | e2e client renders own engagement dashboard; client from another engagement refused | management unfiltered; account-manager owns own engagements; client scoped to one |
+| V2-5.1 | Agent catalog (§12.2) | done | PR #22 | e2e catalog exposes six agents, every agent declares autonomy, only `kpi_reminder` skips approval | `AGENT_CATALOG` in `packages/shared` |
+| V2-5.2 | Compliance Guard (§12.5) | done | PR #22 | e2e failed check blocks `qa_technical`; clearing is attributed | `compliance_checks`; metadata/filename/attribution scan |
+| V2-5.3 | Brief Analysis Agent | done | PR #22 | e2e propose-only records a proposal (16–25 h range), does not apply; human confirm via `ai.review` (ops director) | set `propose-only`; storage blocked while org opted out |
+| V2-5.4 | KPI/Reminder Agent | done | PR #22 | e2e act-and-log reminder applies without approval, raises notification, does not mutate the item | `recipient_id` notification write |
+| V2-5.5 | LLM provider seam (§12.3) | done | PR #22 | e2e catalog reports provider unconfigured + name `none` without env keys; absent key is a graceful no-op | `apps/api/src/llm/llm.provider.ts`; OpenAI-compatible provider behind `PC_LLM_API_KEY`/`BASE_URL`/`MODEL`; provider choice is a human decision, left unconfigured |
+| V2-6.1 | Visual language (§8.1) | done | PR #22 | `packages/design-tokens/test/tokens.test.ts` snapshot passes and fails on drift (verified by injecting `#4a74ed` → `brandRamp.cobalt drifted`); sample of `fig-8.1-landing-mockup.png` confirms `#131021`/`#1c1830`/`#4f7dff`/`#9471cb`/`#d66599`; web build exit 0 | additive to `packages/design-tokens`; app scales untouched. Note: `docs/roadmap-spec-v2.md` had cited `#4a74ed`/`#706ed0`/`#c65e8f` for cobalt/violet/magenta — corrected against the mockup |
+| V2-6.2 | Landing page (§8.2) | done | PR #22 | public-surface check: all five sections present (`Every campaign`, `Built for the whole delivery`, `How it works`, `Two ways in`, `Follow along`); route 200; renders without the app shell | `/` moved to public landing; workspace overview moved to `/dashboard` |
+| V2-6.3 | Sign-up branching (§8.3) | done | PR #22 | public-surface check: three paths present (Employee / Partner agency / Client or third party) and the page states there is no guest self-serve | guest has no self-serve path by design |
+| V2-6.4 | Terms / Privacy / Accessibility (§15.1–15.3) | done | PR #22 | public-surface check: three routes 200 with spec content (terms incl. governing law; privacy incl. UK data location; accessibility incl. WCAG 2.2 target, known gaps, and an explicit not-yet-counsel-reviewed caveat) | explicit draft/legal-review caveats per roadmap rule "legal-finalisation is a human decision" |
+| V2-6.5 | Resources / What's New (§15.4) | done | PR #22 | public-surface check: status + in-development + recently-shipped sections present, incl. `Not configured` for the unconfigured agent provider | honest status rather than aspirational |
 
 ## Recently completed detail
 
@@ -313,16 +313,19 @@ who (or which agent) did it, and what remains. For scope definitions see
 
 ## Open gaps (module-level, excerpt)
 
-Per `docs/gap-analysis.md`, the highest-leverage unfinished surface is:
+Superseded for *new* work by `docs/roadmap-spec-v2.md` (Phases 0–6, all done) and
+the A-block. Retained for the pre-V2 backlog still genuinely open:
 
-1. **Object storage / asset pipeline** — URIs only today; thumbnails,
-   signed URLs, comparison views all hang on this.
-2. **Queue + notifications** — Phase 4 emits notification rows synchronously;
-   V1 needs a queue so delivery is reliable.
-3. **Skills/availability workload** — the current workload page is totals
-   only; PDF V1 wants thresholds, skills, availability, auto-balance.
-4. **Dashboards** — portfolio health, WIP, ageing, rework, approval cycle
-   time, account scorecard — none built.
-5. **Integrations + automation hub** — rules, webhooks, API keys, import,
+1. **Object storage backend** — the V2 `files` model and version chains are
+   built (PR #22), but storage is still URI-only: thumbnails, signed URLs and
+   comparison views hang on a real bucket.
+2. **Queue + notifications** — notifications emit synchronously; V1 needs a
+   queue so delivery is reliable.
+3. **Skills/availability workload** — the workload page is totals only; PDF V1
+   wants thresholds, skills, availability, auto-balance.
+4. **Integrations + automation hub** — rules, webhooks, API keys, import,
    export — none built.
-6. **Identity hardening** — header auth remains; SSO/SCIM/MFA are V1.
+5. **Identity hardening** — header auth remains (A-02 email transport is the
+   keystone: A-03/A-04/A-05/A-10 all depend on it); SSO/SCIM/MFA are V1.
+
+~~Dashboards~~ — delivered by V2 Phase 4 (PR #22), per the V2 rows above.
