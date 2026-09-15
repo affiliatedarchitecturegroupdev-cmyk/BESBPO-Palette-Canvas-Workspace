@@ -483,10 +483,14 @@ product surface and the directory side of it:
   *before* any UI work, and both need their own e2e.
 - Existing UI is `apps/web/app/projects/[id]/BoardView.tsx` (204 lines) — a
   read-oriented view. Extend it rather than starting a second board surface.
-- Timeline/Gantt and subtasks (`parent_item_id`) have no schema at all in
-  `010_v2_core_model.sql`; subtasks need a migration. Scope this slice honestly
-  as "board moves + search first", with timeline/subtasks as a follow-up, rather
-  than claiming all four in one PR.
+- **Correction (2026-09-15):** an earlier version of this note claimed
+  timeline/Gantt and subtasks "have no schema at all in `010_v2_core_model.sql`;
+  subtasks need a migration." That is wrong. Migration 010 already defines
+  `subitem_column` + `subitem` with `parent_item_id`, `ViewType.Gantt` exists in
+  `packages/shared`, and `assertViewConfig` already requires `date_column_id`
+  for both `gantt` and `calendar`. The real gap is that no service method or web
+  renderer reads any of it — that is code work, not a migration. N2.2 shipped
+  moves + search only; the rest is N2.2a.
 
 **N2.3 — V2 comms surface.** The API exists (`comms.controller.ts`, channels +
 `channel_members`, internal-visibility boundary already e2e-tested as

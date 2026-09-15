@@ -5,10 +5,10 @@ import type { V2Item } from '@/lib/api';
 import { BROWSER_API } from '@/lib/config';
 
 /**
- * Cross-board item search (§9). Debounced against TEMPLATE`, which is
- * already scoped to the caller's org and engagement — this component never
- * filters for permission, because a client-side filter would be the wrong place
- * to enforce it.
+ * Cross-board item search (§9). Debounced, and deliberately not filtering for
+ * permission on the client: `GET /boards/search` is already scoped to the
+ * caller's org and engagement, and a client-side filter would be the wrong
+ * place to enforce visibility.
  */
 export default function GlobalSearch({ email }: { email: string | null }) {
   const [open, setOpen] = useState(false);

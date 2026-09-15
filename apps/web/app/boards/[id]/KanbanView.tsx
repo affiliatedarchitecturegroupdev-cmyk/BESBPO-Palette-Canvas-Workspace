@@ -1,5 +1,5 @@
 'use client';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { V2Column, V2Group, V2Item } from '@/lib/api';
 
@@ -36,6 +36,13 @@ export default function KanbanView({
     () => columns.find((c) => c.column_type === 'status' || c.column_type === 'dropdown'),
     [columns],
   );
+
+  // Adopt a fresh server payload, which is what `router.refresh()` after a move
+  // delivers. Without this the optimistic state would outlive the refresh and
+  // mask anyone else's intervening change.
+  useEffect(() => {
+    setLocal(items);
+  }, [items]);
 
   const byGroup = useMemo(() => {
     const map = new Map<string, V2Item[]>();
