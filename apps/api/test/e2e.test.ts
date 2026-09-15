@@ -1053,9 +1053,75 @@ async function main() {
     check('client cannot manage invites (403)', inviteForbidden.status === 403);
     const inviteAccepted = await api(base, '/invites/accept', {
       email: 'newcomer@test.example', method: 'POST',
-      body: { token: tok, name: 'New Comer' },
+      body: { token: tok, email: 'newcomer@test.example', name: 'New Comer' },
     });
     check('invite accepted by newcomer', inviteAccepted.status === 200 || inviteAccepted.status === 201);
+
+    // A-04: the accepted invite must have produced the binding it promised,
+    // and a revoked invite must stop working.
+    const newcomerId = (await pool.query<{ person_id: string }>(
+      `SELECT id AS person_id FROM person WHERE email = 'newcomer@test.example'`,
+    )).rows[0].person_id;
+    const newcomerBinding = await pool.query<{ role: string }>(
+      `SELECT role FROM role_binding WHERE person_id = $1 AND role = 'creative_contributor'`,
+      [newcomerId],
+    );
+    check('accept produced the promised role binding', newcomerBinding.rows.length === 1);
+
+    const reuseAccepted = await api(base, '/invites/accept', {
+      method: 'POST', body: { token: tok, email: 'newcomer@test.example', name: 'New Comer' },
+    });
+    check('accepted invite token cannot be reused (409)', reuseAccepted.status === 409);
+
+    const membersList = await api(base, '/directory/members', { email: 'ops@test.example' });
+    check(
+      'members list includes the accepted newcomer',
+      Array.isArray(membersList.json) &&
+        (membersList.json as { email: string }[]).some((m) => m.email === 'newcomer@test.example'),
+    );
+    const membersForbidden = await api(base, '/directory/members', { email: 'client@test.example' });
+    check('client cannot list members (403)', membersForbidden.status === 403);
+
+    // Revoking is refused for the caller's own bindings — locking yourself out
+    // of the org is not a product-recoverable state.
+    const opsId = (await pool.query<{ id: string }>(
+      `SELECT id FROM person WHERE email = 'ops@test.example'`,
+    )).rows[0].id;
+    const selfRevoke = await api(base, `/directory/members/${opsId}/roles`, {
+      email: 'ops@test.example', method: 'DELETE',
+    });
+    check('admin cannot revoke their own roles (403)', selfRevoke.status === 403);
+
+    const revokeTargetInvite = await api(base, '/invites', {
+      email: 'ops@test.example', method: 'POST',
+      body: { email: 'doomed@test.example', role: 'creative_contributor', scopeType: 'organisation', scopeId: orgId },
+    });
+    const doomedToken = (revokeTargetInvite.json as { token: string }).token;
+    const doomedId = (revokeTargetInvite.json as { id: string }).id;
+    const revokeRes = await api(base, `/invites/${doomedId}/revoke`, { email: 'ops@test.example', method: 'POST' });
+    check('pending invite revoked', revokeRes.status === 200 || revokeRes.status === 201);
+    const revokedAccept = await api(base, '/invites/accept', {
+      method: 'POST', body: { token: doomedToken, email: 'doomed@test.example', name: 'Doomed' },
+    });
+    check('revoked invite token is unusable (409)', revokedAccept.status === 409);
+
+    const newcomerRevoked = await api(base, `/directory/members/${newcomerId}/roles`, {
+      email: 'ops@test.example', method: 'DELETE',
+    });
+    check('admin revokes another member\'s roles', newcomerRevoked.status === 200);
+    const bindingAfterRevoke = await pool.query<{ role: string }>(
+      `SELECT role FROM role_binding WHERE person_id = $1`,
+      [newcomerId],
+    );
+    check('revoked member holds no bindings', bindingAfterRevoke.rows.length === 0);
+    const newcomerBlocked = await api(base, '/projects', { email: 'newcomer@test.example' });
+    check('revoked member loses workspace access (403)', newcomerBlocked.status === 403);
+
+    const revokeAudit = await pool.query<{ action: string }>(
+      `SELECT action FROM audit_event WHERE action = 'member.roles_revoked' AND target_id = $1`,
+      [newcomerId],
+    );
+    check('member revocation is audited', revokeAudit.rows.length >= 1);
 
     console.log('e2e: version confidentiality (P8-02)');
     const conf = await api(base, `/proofing/versions/${v1Id}/confidentiality`, {

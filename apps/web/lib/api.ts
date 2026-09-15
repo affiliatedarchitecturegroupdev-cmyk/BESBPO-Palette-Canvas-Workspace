@@ -471,3 +471,32 @@ export interface AssetRow {
 export async function assets(email: string | null) {
   return api<AssetRow[]>('/assets', email);
 }
+
+export interface MemberRow {
+  id: string;
+  email: string;
+  name: string;
+  roles: { role: string; scope_type: string; scope_id: string }[];
+}
+
+export async function members(email: string | null) {
+  return api<MemberRow[]>('/directory/members', email);
+}
+
+export interface InviteRow {
+  id: string;
+  email: string;
+  role: string;
+  scope_type: string;
+  scope_id: string;
+  token: string;
+  status: string;
+  invited_by: string;
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
+}
+
+export async function invites(email: string | null, all = false) {
+  return api<InviteRow[]>(`/invites${all ? '?all=true' : ''}`, email);
+}
