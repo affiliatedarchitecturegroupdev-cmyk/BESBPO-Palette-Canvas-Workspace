@@ -26,6 +26,18 @@ export class BoardsController {
     return { roles: SEMANTIC_ROLES };
   }
 
+  /**
+   * Cross-board item search over names and column values (§9). Declared above
+   * `@Get(':id')` — Nest matches in declaration order, so a later route here
+   * would be captured as a board id.
+   */
+  @Get('search')
+  async search(@Headers('x-user-email') email: string | undefined, @Query('q') q?: string) {
+    const ctx = await this.identity.resolve(email);
+    this.assertItemRead(ctx);
+    return this.boards.searchItems(ctx, (q ?? '').trim());
+  }
+
   /* ---------------- engagements + workspaces ---------------- */
 
   @Post('engagements')
@@ -142,6 +154,18 @@ export class BoardsController {
     const ctx = await this.identity.resolve(email);
     this.authz.require(ctx, Capability.ItemsWrite);
     return this.boards.updateItem(ctx, itemId, body);
+  }
+
+  /** Move an item between groups and to a position (§9 kanban DnD). */
+  @Post('items/:itemId/move')
+  async moveItem(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('itemId') itemId: string,
+    @Body() body: { groupId: string; beforeItemId?: string },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.ItemsWrite);
+    return this.boards.moveItem(ctx, itemId, body);
   }
 
   /* ---------------- views ---------------- */

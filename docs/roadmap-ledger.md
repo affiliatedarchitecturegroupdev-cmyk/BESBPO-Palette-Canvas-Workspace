@@ -83,7 +83,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | A-11 | Onboarding wizard, template marketplace, demo, help | todo | — | — | depends A-04 |
 | A-12 | Public API versioning, importers, exporters | todo | — | — | depends P7-04 (keys), P8-11 |
 | A-13 | Webhook hardening, rate limits, retention enforcement, health/status | todo | — | — | depends §0.5, P6-11 |
-| A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | todo | — | — | depends P8-03..P8-06 |
+| A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | in-review | PR #26 `n2-board-ui-dnd-search` (moves + search); #25 carries N1 | DnD moves + global search done under N2.2 (374 passed / 0 failed; browser pass). Timeline/Gantt renderer, subtasks, and swimlanes remain (N2.2a) | Partial by design. The §9 data model is complete — `subitem`/`parent_item_id`, `ViewType.Gantt`, and `assertViewConfig` for `date_column_id` all exist; what is missing is service + renderer code, not schema. Row stays open until those land |
 | A-15 | Mobile/PWA, whitelabel, widgets, L10N | todo | — | — | depends A-07, §9 |
 | A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | todo | — | — | continuous |
 | UI-01 | Web UI/UX advancement — scalable + mobile-first | done | PR #21 `c76d68c` | CI "Build + tests + gates" green on PR #21; root build exit 0; e2e 239/239; drift 0; LoC 18,039; browser QA on work-1 (dashboard, calendar, settings, help, reports, workload, capacity, commercial, projects, audit all render with seeded data); DataTable server-safe fix (no event handlers across AppShell client boundary) | new `/` dashboard (KPIs + intake attention + project pulse + dispatch), `/calendar` delivery timeline, `/settings` hub, `/help`; shared PageHeader/Badge/DataTable/StatCard/Card/ProgressBar/EmptyState; mobile-first CSS (stacked card rows, compact header, bottom quick-nav); `agentRules:false` |
@@ -131,8 +131,51 @@ rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
 | N1.3 | A-03 password reset/change + session revocation, audited | in-review | branch `n1-email-transport-auth-chain` | e2e: reset round-trip, weak password 400, reuse 410, expired 410, unknown 401, pre-reset session revoked, no active sessions left behind, change-password wrong-current 401, changer's own session survives, revoke-others keeps caller, all audited; 354 passed / 0 failed | `consumed_at`/`email_outbox` single-use tokens; `person.password_changed_at` added; `revokeSessions(exceptToken?)` spared the caller's own session on change and revoked all on reset |
 | N1.4 | A-04 members/invites/roles admin surface | in-review | branch `n1-email-transport-auth-chain` | e2e: binding created on accept, invite reuse 409, pending-invite revoke → token 409, member revoke drops bindings, revoked member 403 on `/projects`, self-revoke 403, client 403 on member list, revocation audited; 365 passed / 0 failed. Browser: admin sees members + invites; non-admin sees a restricted notice | `GET /directory/members`, `DELETE /directory/members/:personId/roles`; `/settings/members` + `MemberActions.tsx`. Invite tokens are surfaced in the UI because there is still no mail transport (ADR-0002 D1) — an admin has to hand the token over manually |
 | N2.1 | Public-surface check moved into `npm test`; `body_of` clobbering documented | in-review | branch `n1-email-transport-auth-chain` | `npm test` now runs `test:public-surface` → `scripts/public-surface-gate.sh`, which boots the built app on an ephemeral port and rebuilds when sources are newer than `BUILD_ID`; negative-tested by removing `POPIA` from the privacy page → gate failed exit 1; green when restored; CI step for the standalone check removed as redundant | The check was a separate CI step nobody ran locally, which is how fabricated legal content reached `main`. Gate lives with the tests now, so a local `npm test` catches the same drift CI does |
+| N2.2 | A-14 board moves + global search (API + web) | in-review | PR #26 `n2-board-ui-dnd-search` (stacked on PR #25) | e2e: move between groups lands in the destination; reorder before a sibling leaves a gap-free ordered list; `beforeItemId` outside the destination group 400; guest move 403; move audited; search finds by name, empty on no match, guest search returns nothing; 374 passed / 0 failed. Browser: `/boards` lists, `/boards/:id` renders groups + status labels, ⌘K search returns "Acme launch film" | `POST /boards/items/:itemId/move` (park-then-reorder) and `GET /boards/search`, hoisted above `@Get(':id')` so `search` is not read as a board id. `apps/web/app/boards/*` + `KanbanView.tsx` (optimistic reorder mirroring the server rule, rollback on rejection) + `GlobalSearch.tsx`. Timeline/Gantt and subtasks split to N2.2a. Correction: `subitem` + `parent_item_id` **do** exist in migration 010 — the gap is that no service or UI code reads them, not a missing migration |
 
 ## Recently completed detail
+
+### N2.2 — A-14 board DnD moves + cross-board search (2026-09-15)
+
+- Branch: `n2-board-ui-dnd-search`, PR #26, stacked on PR #25 `n1-email-transport-auth-chain` (both pending human review)
+- API work that had to land before any UI:
+  - `POST /boards/items/:itemId/move` — public surface for kanban DnD. The
+    reorder is two statements, not one: the item is parked at position `-1`,
+    the destination list closes the gap (`position = position + 1 WHERE
+    position >= index AND id <> :itemId`), then the item is placed. A single
+    statement cannot do this because the mover's own old position sits inside
+    the range being shifted. `position` has no unique constraint in migration
+    010, so the intermediate parked state is legal.
+  - `beforeItemId` must resolve to a row in the *destination* group; anything
+    else is 400 rather than silently ordered against the wrong list.
+  - `GET /boards/search` — cross-board item search over `name` and
+    `column_values::text`, archived boards excluded, `LIMIT 50`. Declared
+    **above** `@Get(':id')`: Nest matches in declaration order, so a later
+    declaration would have been captured as a board id and returned
+    `board not found`.
+  - Moves write an `item.moved` audit row with the destination group + index.
+- Visibility: a guest (`ctx.itemScope`) gets `[]` from search and 403 from move.
+  Search filters `canSeeEngagement` after the query, matching how `getItem`
+  already gates reads.
+- Web: `/boards` (list) and `/boards/[id]` with `KanbanView.tsx` — HTML5 DnD,
+  optimistic reorder that mirrors the server's index rule and rolls back on
+  rejection. `GlobalSearch.tsx` sits in the app-shell top bar and calls
+  `boards/search` through the same-origin `/pc-api` prefix. Types/helpers in
+  `lib/api.ts`; `Boards` added to `nav.ts`.
+- Gates: e2e **374 passed / 0 failed** (board move, beforeItemId rejection,
+  guest move rejection, search, audit search); `npm run build` exit 0;
+  public-surface check OK; drift 0 findings.
+- Browser pass (dev identity `am@test.example`, cookie `pc_user_email`):
+  `/boards` lists four seeded boards; `/boards/:id` renders both groups with
+  status labels; ⌘K search for "Acme" returns the cross-board hit
+  "Acme launch film". A stale `dist/main` server had to be killed before the
+  new `search` route answered — the watch process was serving an old build.
+- Deliberately **not** in this slice: the Gantt/timeline renderer, subtasks,
+  and swimlanes (N2.2a). The schema for those already exists — `subitem` +
+  `parent_item_id` in migration 010, `ViewType.Gantt`, and
+  `assertViewConfig`'s `date_column_id` requirement — so the remaining work is
+  service + renderer code, not a migration. Claiming all four in one PR would
+  have overstated coverage.
 
 ### V2 Phases 1–6 — boards, comms, dashboards, agents, public surface (2026-09-15)
 
@@ -399,7 +442,8 @@ abstraction either way and records the decision in `docs/decisions/`.
 | Slice | Scope | Depends on | Test shape |
 | --- | --- | --- | --- |
 | N2.1 | Make `public-surface-check.sh` part of `npm test` rather than an optional script, and document the `body_of` clobbering class of bug in `AGENTS.md` so it is not reintroduced | — | `npm test` fails when a public page drifts |
-| N2.2 | A-14 board UI: DnD board moves, timeline/Gantt, subtasks, global search over the V2 §9 model | SPA-01 tokens | e2e + browser: board moves persist, search highlights |
+| N2.2 | A-14 board UI: DnD board moves, global search over the V2 §9 model. Timeline/Gantt + subtasks are **not** in this slice | SPA-01 tokens | e2e: moves persist, reorder is gap-free, guest 403; browser: K search returns cross-board hits |
+| N2.2a | A-14 follow-up: timeline/Gantt renderer, subtasks, swimlanes | N2.2 | e2e: subtask parent/child round-trip; Gantt view renders off `date_column_id` |
 | N2.3 | Surface the V2 comms layer (§11) in the web app — channels, threads, mentions, meetings | N2.2 | browser pass; internal channel hidden from client |
 
 ### Then — N3: honesty and operational maturity
@@ -439,10 +483,14 @@ product surface and the directory side of it:
   *before* any UI work, and both need their own e2e.
 - Existing UI is `apps/web/app/projects/[id]/BoardView.tsx` (204 lines) — a
   read-oriented view. Extend it rather than starting a second board surface.
-- Timeline/Gantt and subtasks (`parent_item_id`) have no schema at all in
-  `010_v2_core_model.sql`; subtasks need a migration. Scope this slice honestly
-  as "board moves + search first", with timeline/subtasks as a follow-up, rather
-  than claiming all four in one PR.
+- **Correction (2026-09-15):** an earlier version of this note claimed
+  timeline/Gantt and subtasks "have no schema at all in `010_v2_core_model.sql`;
+  subtasks need a migration." That is wrong. Migration 010 already defines
+  `subitem_column` + `subitem` with `parent_item_id`, `ViewType.Gantt` exists in
+  `packages/shared`, and `assertViewConfig` already requires `date_column_id`
+  for both `gantt` and `calendar`. The real gap is that no service method or web
+  renderer reads any of it — that is code work, not a migration. N2.2 shipped
+  moves + search only; the rest is N2.2a.
 
 **N2.3 — V2 comms surface.** The API exists (`comms.controller.ts`, channels +
 `channel_members`, internal-visibility boundary already e2e-tested as
@@ -466,8 +514,8 @@ on the server, which would be a security bug, not a UI bug.
 
 | Gate | Target | Actual | Status |
 | --- | --- | --- | --- |
-| LoC | ≥ 80k (Phase 6 exit) | ~24.5k | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new |
-| e2e | ≥ 320 checks | 354 | met |
+| LoC | ≥ 80k (Phase 6 exit) | ~37.6k (ts/tsx/sql/sh/js, excl. build dirs) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate |
+| e2e | ≥ 320 checks | 374 (N2.2) | met |
 | Permission tests | pass | pass | met |
 | Drift | 0 findings | 0 | met |
 

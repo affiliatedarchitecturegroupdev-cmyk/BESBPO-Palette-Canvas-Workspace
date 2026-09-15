@@ -367,6 +367,83 @@ export class BoardsService {
     return updated;
   }
 
+  /**
+   * Move an item to `groupId`, ordering it `beforeItemId` when given. The move
+   * is a two-step rewrite: the item is parked at a free negative position, the
+   * destination list closes up around the gap, then the item is placed. Doing
+   * it in one statement would leave the item's own old position in the way.
+   */
+  async moveItem(
+    ctx: UserContext,
+    itemId: string,
+    input: { groupId: string; beforeItemId?: string },
+  ): Promise<ItemRow> {
+    const item = await this.getItem(ctx, itemId);
+    if (ctx.itemScope) throw new ForbiddenException('guest may comment, not move');
+    const group = await this.db.oneOrNull<{ id: string }>(
+      'SELECT id FROM board_group WHERE id = $1 AND board_id = $2',
+      [input.groupId, item.board_id],
+    );
+    if (!group) throw new NotFoundException('group not found');
+
+    let index: number;
+    if (input.beforeItemId) {
+      const before = await this.db.oneOrNull<{ position: number; group_id: string }>(
+        'SELECT position, group_id FROM item WHERE id = $1 AND board_id = $2',
+        [input.beforeItemId, item.board_id],
+      );
+      // A `before` target in another group would silently order against the
+      // wrong list, so it is rejected rather than coerced.
+      if (!before || before.group_id !== input.groupId) {
+        throw new BadRequestException('beforeItemId must be in the destination group');
+      }
+      index = before.position;
+    } else {
+      const last = await this.db.one<{ last: number | null }>(
+        'SELECT MAX(position) AS last FROM item WHERE group_id = $1',
+        [input.groupId],
+      );
+      index = last.last === null ? 0 : last.last + 1;
+    }
+
+    await this.db.query('UPDATE item SET position = $2 WHERE id = $1', [itemId, -1]);
+    await this.db.query(
+      `UPDATE item SET position = position + 1
+       WHERE group_id = $1 AND position >= $2 AND id <> $3`,
+      [input.groupId, index, itemId],
+    );
+    const moved = await this.db.one<ItemRow>(
+      `UPDATE item SET group_id = $2, position = $3, updated_at = now()
+       WHERE id = $1 RETURNING *`,
+      [itemId, input.groupId, index],
+    );
+    await this.audit.log(ctx.orgId, ctx.userId, 'item.moved', 'item', itemId, {
+      groupId: input.groupId,
+      position: index,
+    });
+    return moved;
+  }
+
+  /**
+   * Cross-board item search (§9). A guest reaches nothing here — its one item is
+   * served by the scoped read, and a search would let it enumerate the org.
+   */
+  async searchItems(ctx: UserContext, query: string): Promise<ItemRow[]> {
+    if (ctx.itemScope) return [];
+    const like = `%${query}%`;
+    const { rows } = await this.db.query<ItemRow>(
+      `SELECT i.* FROM item i
+       JOIN board b ON b.id = i.board_id
+       WHERE i.org_id = $1
+         AND (i.name ILIKE $2 OR i.column_values::text ILIKE $2)
+         AND b.archived_at IS NULL
+       ORDER BY i.updated_at DESC
+       LIMIT 50`,
+      [ctx.orgId, like],
+    );
+    return rows.filter((r) => this.canSeeEngagement(ctx, r.engagement_id));
+  }
+
   /* ---------------- views ---------------- */
 
   async addView(

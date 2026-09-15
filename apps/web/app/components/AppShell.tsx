@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { ROLE_CAPABILITIES, Role } from '@palette-canvas/shared';
 import { isNavActive, isPublicPath, NAV_SECTIONS, visibleNavItem } from './nav';
+import GlobalSearch from './GlobalSearch';
 
 /**
  * AppShell — responsive application chrome for Palette Canvas.
@@ -184,6 +185,7 @@ export default function AppShell({
         </nav>
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <GlobalSearch email={email} />
           {/* Notification bell (mobile fallback) */}
           <Link href="/notifications" aria-label="Inbox" style={{ display: 'none', color: 'var(--ink-dim)' }} className="pc-bell">
             <BellIcon />
