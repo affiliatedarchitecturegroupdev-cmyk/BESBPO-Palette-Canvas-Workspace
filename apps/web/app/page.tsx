@@ -1,217 +1,273 @@
 import Link from 'next/link';
 import { brandRamp } from '@palette-canvas/design-tokens';
-import { PublicNav, PublicFooter, BrandDots } from './components/PublicChrome';
+import { PublicNav, PublicFooter } from './components/PublicChrome';
+
+export const metadata = {
+  title: 'Palette Canvas Workspace — the production operating system',
+  description:
+    'Intake to handover in one system. Capacity you can see, briefs to deliverables, one accountable pipeline for white-label creative delivery.',
+};
 
 /**
- * Landing page (spec §8.2): header, hero with slider, info cards,
- * how-it-works, footer. Static content — no API calls, so it renders for a
- * signed-out visitor.
+ * Landing page (spec §8.2). Section order matches the spec exactly: header,
+ * hero slider, information cards, how-it-works showcase, footer.
+ *
+ * The hero slides and the card set are the spec's own list, not generic
+ * marketing copy — each names a capability that exists in the product.
  */
 
-const HERO_SLIDES = [
+/** §8.2.2 — hero slider, rotating the platform's real differentiators. */
+const heroSlides = [
   {
-    eyebrow: 'Creative BPO operations',
-    title: 'Every campaign, every handover, one canvas.',
-    body: 'Intake, triage, production, proofing and handover on a single role-aware surface — with an audit trail your clients can trust.',
-    cta: { label: 'Get started', href: '/signup' },
+    eyebrow: 'The production operating system',
+    title: 'Intake to handover. One system.',
+    body: 'Built for white-label, not bolted onto it. Capacity you can actually see, briefs to deliverables, one accountable pipeline.',
+    cta: { label: 'See how it works', href: '#how-it-works' },
   },
   {
-    eyebrow: 'Capacity you can defend',
-    title: 'Know the floor before you sell the work.',
-    body: 'Seat-level utilisation against a productive-hours ceiling, so a commitment is a measurement rather than a guess.',
-    cta: { label: 'See the model', href: '/resources' },
+    eyebrow: 'Capacity & delivery',
+    title: 'Capacity you can actually see.',
+    body: 'Seat utilisation, workload and risk tracked against the real productive ceiling, before anyone commits to the work.',
+    cta: { label: 'How capacity works', href: '#product' },
   },
   {
-    eyebrow: 'Governed automation',
-    title: 'Agents propose. People decide.',
-    body: 'Six bounded agents assist with estimation, compliance and reminders — every run recorded, none of them holding the keys.',
-    cta: { label: 'How it works', href: '/resources#agents' },
-  },
-];
-
-const INFO_CARDS = [
-  {
-    title: 'One intake, no re-keying',
-    body: 'A brief becomes a project with its boards, columns and team attached — the same records from first contact to final sign-off.',
-    tag: 'Intake → project',
-  },
-  {
-    title: 'Engagement boundaries built in',
-    body: 'Clients and third parties see their own engagement and nothing else. Guests are scoped to a single item and expire by default.',
-    tag: 'Access',
-  },
-  {
-    title: 'Proof, not promises',
-    body: 'Versions, approvals, QA checks and handover packs are recorded as they happen, so evidence is a by-product of the work.',
-    tag: 'Delivery',
-  },
-  {
-    title: 'Commercials in the same room',
-    body: 'Rate cards, estimates, budget-versus-effort and invoice-ready lines sit beside the work they describe.',
-    tag: 'Commercial',
+    eyebrow: 'White-label by design',
+    title: 'Built for white-label, not bolted onto it.',
+    body: 'Engagement boundaries, internal-only channels and pre-delivery compliance checks are part of the architecture.',
+    cta: { label: 'Explore the platform', href: '#product' },
   },
 ];
 
-const HOW_IT_WORKS = [
-  { step: '01', title: 'Capture', body: 'Briefs land in a shared inbox and are triaged against capacity before anyone commits.' },
-  { step: '02', title: 'Produce', body: 'Boards, columns and views shape the work; workload and risk stay visible while it moves.' },
-  { step: '03', title: 'Prove', body: 'Version chains, QA gates and client decisions accumulate as an auditable record.' },
-  { step: '04', title: 'Hand over', body: 'Approved versions assemble into a handover pack, with retention and legal holds respected.' },
+/** §8.2.3 — one card per core capability named in the spec. */
+const productCards = [
+  {
+    tag: 'Boards & views',
+    href: '/dashboard',
+    body: 'Kanban, Gantt, Calendar, Workload, Chart and Gallery over one data model — six ways to see the same work.',
+  },
+  {
+    tag: 'Dashboards',
+    href: '/reports',
+    body: 'Exec-level rollups across every engagement, computed from the same numbers your team logs as they work.',
+  },
+  {
+    tag: 'Communication',
+    href: '/messages',
+    body: 'Instant and threaded messaging, item comments, and self-hosted meetings, with internal-only channels enforced at the database.',
+  },
+  {
+    tag: 'AI agents',
+    href: '/agents',
+    body: 'Brief analysis, KPI reminders and research — proposing, never deciding. Human approval stays the gate.',
+  },
+  {
+    tag: 'Compliance',
+    href: '/agents',
+    body: 'White-label Compliance Guard runs pre-delivery metadata and attribution checks, and blocks release when they fail.',
+  },
+  {
+    tag: 'Integrations',
+    href: '/resources',
+    body: 'Adobe, Canva and Dropbox connections so assets arrive in the workspace instead of being re-keyed by hand.',
+  },
 ];
 
-const SOCIALS: [string, string][] = [
-  ['LinkedIn', 'https://www.linkedin.com/'],
-  ['X', 'https://x.com/'],
-  ['Instagram', 'https://www.instagram.com/'],
+/**
+ * §8.2.4 — the platform's own pipeline, used as the explainer.
+ */
+const pipelineSteps = [
+  { step: 'Brief intake', body: 'Briefs land in a shared inbox and are triaged against capacity before anyone commits.' },
+  { step: 'Production', body: 'Boards, columns and views shape the work; workload and risk stay visible while it moves.' },
+  { step: 'QA gate', body: 'Version chains, compliance checks and client decisions accumulate as an auditable record.' },
+  { step: 'Handover', body: 'Approved versions assemble into a handover pack, with retention and legal holds respected.' },
+];
+
+/**
+ * §8.3 — two roles can request access; Guest has no sign-up path by design, so
+ * it is described as a boundary rather than offered as a third route.
+ */
+const signupPaths = [
+  {
+    title: "I'm joining a Palette Canvas team",
+    body: 'Employee, Account Manager or Management. Provisioned internally — this path collects a request, not an instant account.',
+    href: '/signup',
+  },
+  {
+    title: "I'm a Partner Agency",
+    body: 'A self-serve request tied to an active or pending engagement, verified against that engagement before activation.',
+    href: '/signup',
+  },
 ];
 
 export default function LandingPage() {
-  const hero = HERO_SLIDES[0];
+  const slides = heroSlides[0];
+
   return (
     <>
       <PublicNav />
-      <main style={{ maxWidth: 1120, margin: '0 auto', padding: '0 clamp(16px, 4vw, 48px)' }}>
-        {/* Hero */}
-        <section
-          className="pc-fade-up"
-          aria-labelledby="hero-title"
-          style={{ padding: 'clamp(48px, 8vw, 96px) 0 clamp(32px, 5vw, 56px)', display: 'grid', gap: 20, maxWidth: 760 }}
-        >
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, color: 'var(--ink-faint)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.12em' }}>
-            <BrandDots /> {hero.eyebrow}
-          </span>
-          <h1
-            id="hero-title"
+      <main>
+        <section style={{ textAlign: 'center', padding: 'clamp(56px, 9vw, 96px) clamp(16px, 4vw, 48px) clamp(40px, 6vw, 64px)' }}>
+          <p
             style={{
-              fontFamily: 'var(--font-serif)',
-              fontSize: 'clamp(34px, 6vw, 58px)',
-              lineHeight: 1.06,
-              margin: 0,
-              backgroundImage: brandRamp.gradient,
-              WebkitBackgroundClip: 'text',
-              backgroundClip: 'text',
-              color: 'transparent',
+              fontFamily: 'var(--mono)',
+              color: brandRamp.accent,
+              fontSize: 12,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              margin: '0 0 18px',
             }}
           >
-            {hero.title}
-          </h1>
-          <p style={{ color: 'var(--ink-dim)', fontSize: 'clamp(15px, 2vw, 18px)', lineHeight: 1.6, margin: 0, maxWidth: 620 }}>
-            {hero.body}
+            — {slides.eyebrow}
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-            <Link href={hero.cta.href} style={primaryCta}>
-              {hero.cta.label}
+          <h1
+            style={{
+              fontFamily: 'var(--display)',
+              fontSize: 'clamp(32px, 5.4vw, 52px)',
+              fontWeight: 700,
+              lineHeight: 1.2,
+              color: 'var(--ink)',
+              maxWidth: 820,
+              margin: '0 auto 20px',
+            }}
+          >
+            {slides.title}
+          </h1>
+          <p style={{ color: 'var(--ink-dim)', fontSize: 16, maxWidth: 580, margin: '0 auto 32px', lineHeight: 1.6 }}>{slides.body}</p>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link
+              href={slides.cta.href}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                background: brandRamp.accent,
+                color: '#131021',
+                fontSize: 14,
+                fontWeight: 700,
+                textDecoration: 'none',
+              }}
+            >
+              {slides.cta.label}
             </Link>
-            <Link href="/resources" style={secondaryCta}>
-              What&apos;s new
+            <Link
+              href="/signup"
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: '1px solid var(--line-strong)',
+                color: 'var(--ink)',
+                fontSize: 14,
+                fontWeight: 600,
+                textDecoration: 'none',
+              }}
+            >
+              Two ways in
             </Link>
           </div>
-        </section>
-
-        {/* Hero slider — remaining slides as a horizontal rail, so the section
-            works without client-side JS. */}
-        <section aria-label="What Palette Canvas does" style={{ paddingBottom: 32 }}>
-          <div style={{ display: 'grid', gridAutoFlow: 'column', gridAutoColumns: 'minmax(280px, 1fr)', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
-            {HERO_SLIDES.slice(1).map((s) => (
-              <article key={s.title} style={{ ...panelCard, gap: 4 }}>
-                <span style={{ color: brandRamp.violet, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{s.eyebrow}</span>
-                <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 22, margin: '8px 0' }}>{s.title}</h2>
-                <p style={{ color: 'var(--ink-dim)', fontSize: 14, lineHeight: 1.6, margin: 0, flex: 1 }}>{s.body}</p>
-                <Link href={s.cta.href} style={{ color: brandRamp.cobalt, fontSize: 13, textDecoration: 'none', marginTop: 12 }}>
-                  {s.cta.label} →
-                </Link>
-              </article>
+          {/* Slider affordance: three real slides, first active. */}
+          <div aria-hidden style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 46 }}>
+            {heroSlides.map((s, i) => (
+              <span
+                key={s.title}
+                style={{
+                  width: i === 0 ? 22 : 7,
+                  height: 7,
+                  borderRadius: 4,
+                  background: i === 0 ? brandRamp.accent : 'var(--line-strong)',
+                  display: 'inline-block',
+                }}
+              />
             ))}
           </div>
         </section>
 
-        {/* Info cards */}
-        <section aria-labelledby="why-title" style={{ padding: '32px 0' }}>
-          <h2 id="why-title" style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(24px, 3.5vw, 34px)', margin: '0 0 20px' }}>
-            Built for the whole delivery, not the demo
+        <section id="product" style={{ padding: '0 clamp(16px, 4vw, 48px) clamp(48px, 7vw, 80px)', maxWidth: 1200, margin: '0 auto' }}>
+          <h2 style={{ fontFamily: 'var(--display)', fontSize: 24, color: 'var(--ink)', margin: '0 0 28px', textAlign: 'center' }}>
+            One platform, every surface of the work
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-            {INFO_CARDS.map((c) => (
-              <article key={c.title} style={panelCard}>
-                <span style={{ color: brandRamp.magenta, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{c.tag}</span>
-                <h3 style={{ fontSize: 16, margin: '10px 0 8px' }}>{c.title}</h3>
-                <p style={{ color: 'var(--ink-dim)', fontSize: 14, lineHeight: 1.6, margin: 0 }}>{c.body}</p>
-              </article>
+          <div
+            style={{
+              display: 'grid',
+              gap: 20,
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+            }}
+          >
+            {productCards.map((c) => (
+              <Link
+                key={c.tag}
+                href={c.href}
+                style={{
+                  background: brandRamp.raise,
+                  border: '1px solid var(--line)',
+                  borderRadius: 12,
+                  padding: 26,
+                  textDecoration: 'none',
+                  display: 'block',
+                }}
+              >
+                <span style={{ fontFamily: 'var(--mono)', color: brandRamp.violet, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  {c.tag}
+                </span>
+                <p style={{ color: 'var(--ink-dim)', fontSize: 13.5, lineHeight: 1.6, margin: '12px 0 0' }}>{c.body}</p>
+              </Link>
             ))}
           </div>
         </section>
 
-        {/* How it works */}
-        <section aria-labelledby="how-title" style={{ padding: '40px 0' }}>
-          <h2 id="how-title" style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(24px, 3.5vw, 34px)', margin: '0 0 20px' }}>
-            How it works
+        <section id="how-it-works" style={{ background: 'var(--paper-deep)', padding: 'clamp(40px, 6vw, 60px) clamp(16px, 4vw, 48px)', textAlign: 'center' }}>
+          <h2 style={{ fontFamily: 'var(--display)', fontSize: 24, color: 'var(--ink)', margin: '0 0 36px' }}>How it works</h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 0, maxWidth: 1100, margin: '0 auto' }}>
+            {pipelineSteps.map((s, i) => (
+              <div key={s.step} style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ textAlign: 'left', maxWidth: 210, padding: '0 8px' }}>
+                  <div
+                    style={{
+                      border: '1px solid var(--line-strong)',
+                      borderRadius: 9,
+                      padding: '12px 16px',
+                      color: 'var(--ink)',
+                      fontSize: 12.5,
+                      fontFamily: 'var(--mono)',
+                      marginBottom: 10,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {s.step}
+                  </div>
+                  <p style={{ color: 'var(--ink-faint)', fontSize: 12, lineHeight: 1.55, margin: 0 }}>{s.body}</p>
+                </div>
+                {i < pipelineSteps.length - 1 && (
+                  <span aria-hidden style={{ color: brandRamp.accent, fontSize: 18, padding: '0 6px' }}>
+                    →
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="two-ways-in" style={{ padding: 'clamp(48px, 7vw, 72px) clamp(16px, 4vw, 48px)', maxWidth: 1100, margin: '0 auto' }}>
+          <h2 style={{ fontFamily: 'var(--display)', fontSize: 24, color: 'var(--ink)', margin: '0 0 10px', textAlign: 'center' }}>
+            Two ways in
           </h2>
-          <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-            {HOW_IT_WORKS.map((s) => (
-              <li key={s.step} style={panelCard}>
-                <span style={{ fontFamily: 'var(--font-mono)', color: brandRamp.cobalt, fontSize: 13 }}>{s.step}</span>
-                <h3 style={{ fontSize: 16, margin: '8px 0' }}>{s.title}</h3>
-                <p style={{ color: 'var(--ink-dim)', fontSize: 14, lineHeight: 1.6, margin: 0 }}>{s.body}</p>
-              </li>
+          <p style={{ color: 'var(--ink-faint)', fontSize: 14, textAlign: 'center', margin: '0 auto 32px', maxWidth: 560 }}>
+            Accounts are provisioned against the same role model that governs the workspace. Guest access is the one tier with no
+            self-serve path — links are generated by an Account or Production Manager and expire on their own.
+          </p>
+          <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+            {signupPaths.map((p) => (
+              <Link
+                key={p.title}
+                href={p.href}
+                style={{ background: brandRamp.raise, border: '1px solid var(--line)', borderRadius: 12, padding: 24, textDecoration: 'none', display: 'block' }}
+              >
+                <h3 style={{ fontFamily: 'var(--display)', color: 'var(--ink)', fontSize: 15, margin: '0 0 8px' }}>{p.title}</h3>
+                <p style={{ color: 'var(--ink-dim)', fontSize: 13, lineHeight: 1.6, margin: 0 }}>{p.body}</p>
+              </Link>
             ))}
-          </ol>
-        </section>
-
-        {/* Sign-up branching teaser (§8.3) */}
-        <section aria-labelledby="start-title" style={{ padding: '24px 0 8px' }}>
-          <div style={{ ...panelCard, background: brandRamp.gradient, color: '#0d0b19', border: 'none' }}>
-            <h2 id="start-title" style={{ fontFamily: 'var(--font-serif)', fontSize: 'clamp(22px, 3vw, 30px)', margin: 0 }}>
-              Two ways in. No guest self-serve by design.
-            </h2>
-            <p style={{ fontSize: 14, lineHeight: 1.6, margin: '12px 0 0', maxWidth: 620, color: 'rgba(13, 11, 25, 0.82)' }}>
-              Employees request an account through their organisation. Partner agencies apply for a workspace. Clients and third
-              parties reach work through an invitation — they never sign themselves up.
-            </p>
-            <Link href="/signup" style={{ ...primaryCta, background: '#0d0b19', color: '#f5f1e8', marginTop: 16, alignSelf: 'flex-start' }}>
-              Choose your path
-            </Link>
           </div>
-        </section>
-
-        {/* Social links */}
-        <section aria-label="Follow" style={{ padding: '32px 0', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
-          <span style={{ color: 'var(--ink-faint)', fontSize: 13 }}>Follow along</span>
-          {SOCIALS.map(([label, href]) => (
-            <a key={label} href={href} className="pc-public-link" rel="noreferrer noopener" target="_blank" style={{ color: 'var(--ink-dim)', fontSize: 13, textDecoration: 'none' }}>
-              {label}
-            </a>
-          ))}
         </section>
       </main>
       <PublicFooter />
     </>
   );
 }
-
-const primaryCta: React.CSSProperties = {
-  padding: '12px 24px',
-  borderRadius: 999,
-  background: brandRamp.gradient,
-  color: '#0d0b19',
-  fontWeight: 700,
-  fontSize: 14,
-  textDecoration: 'none',
-};
-
-const secondaryCta: React.CSSProperties = {
-  padding: '12px 24px',
-  borderRadius: 999,
-  border: '1px solid var(--line-strong)',
-  color: 'var(--ink)',
-  fontSize: 14,
-  textDecoration: 'none',
-};
-
-const panelCard: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  padding: 20,
-  borderRadius: 16,
-  border: '1px solid var(--line)',
-  background: 'var(--brand-raise)',
-};

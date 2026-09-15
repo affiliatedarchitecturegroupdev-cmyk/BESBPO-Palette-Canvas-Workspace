@@ -1,4 +1,5 @@
 import { LegalPage, Clause, Callout } from '../LegalPage';
+import { SUPPORT_EMAIL } from '../contact';
 
 export const metadata = { title: 'Terms of service — Palette Canvas' };
 
@@ -6,83 +7,73 @@ export default function TermsPage() {
   return (
     <LegalPage
       title="Terms of service"
-      updated="14 September 2026"
-      intro="These terms govern use of the Palette Canvas Workspace. They are written to be read: short clauses, plain descriptions of what each party is responsible for."
+      intro="These terms govern use of the Palette Canvas Workspace platform itself — account access, content you create or upload within it, and platform availability."
     >
       <Callout>
-        This is a working draft kept in step with the product. It has not yet been reviewed by our external counsel, and it is not
-        a substitute for the signed master services agreement under which your organisation engages us.
+        <strong>Scope.</strong> These terms do not replace the Professional Services Agreement governing your production
+        engagement, nor the corporate website&apos;s own Terms of Service — those remain separately in force for their own scope.
+        This is drafted content, pending qualified legal review.
       </Callout>
 
-      <Clause heading="1. Who these terms are between">
+      <Clause heading="1. Accounts">
         <p>
-          These terms are between Palette Canvas Ltd (“we”, “us”) and the organisation that operates your workspace (“you”). Where
-          your organisation has a signed master services agreement with us, that agreement takes precedence over anything here.
+          Access requires an account provisioned through Palette Canvas&apos;s identity system. Internal staff accounts are
+          provisioned by Palette Canvas administration. Partner Agency and Guest accounts are provisioned by your Palette Canvas
+          account contact, or generated as scoped, time-boxed access links.
         </p>
-        <p>
-          Individual users — employees, partner-agency staff, clients and third parties — use the workspace under their
-          organisation&apos;s agreement and the access granted to them by that organisation.
-        </p>
+        <p>You are responsible for activity under your own credentials. Report suspected unauthorized access immediately.</p>
       </Clause>
 
-      <Clause heading="2. Accounts and access">
-        <p>
-          Accounts are issued by your organisation. Employees request access through their employer; partner agencies apply for a
-          workspace. Clients and third parties are invited to specific work and cannot register themselves.
-        </p>
-        <p>
-          Guest access is deliberately narrow: a guest link resolves to the item it was issued for, carries an expiry, and can be
-          revoked at any time. You are responsible for sharing invitations only with the intended recipient.
-        </p>
-      </Clause>
-
-      <Clause heading="3. Acceptable use">
-        <p>You agree not to use the workspace to:</p>
+      <Clause heading="2. Acceptable use">
+        <p>The platform exists to support Palette Canvas engagements. You agree not to:</p>
         <ul style={{ paddingLeft: 20, margin: 0, display: 'grid', gap: 6 }}>
-          <li>upload unlawful material, or material you do not have the right to share;</li>
-          <li>attempt to reach data belonging to another engagement or another organisation;</li>
-          <li>circumvent permission checks, rate limits or audit logging;</li>
-          <li>upload files containing malware, or use file sharing to distribute it.</li>
+          <li>use the platform to store or transmit content unrelated to an active engagement;</li>
+          <li>attempt to access boards, items, or data outside your account&apos;s scoped permissions, including through automated means;</li>
+          <li>share Guest-tier access links with anyone beyond the intended recipient;</li>
+          <li>
+            use any integrated third-party service — the Adobe, Canva or Dropbox integrations, or the research and asset-sourcing
+            agents — in a way that violates that third party&apos;s own terms of service.
+          </li>
         </ul>
-        <p>Automated agents may only act within the autonomy level declared for them. Human approval remains the gate for any action that changes delivery records.</p>
       </Clause>
 
-      <Clause heading="4. Content and intellectual property">
+      <Clause heading="3. Content you create or upload">
         <p>
-          You retain ownership of the material you upload. You grant us the licence needed to store, process, back up and display
-          that material in order to run the service — nothing wider.
-        </p>
-        <p>The software, its design system and its documentation remain our intellectual property.</p>
-      </Clause>
-
-      <Clause heading="5. Availability and support">
-        <p>
-          We target the availability and support response times recorded in your master services agreement. Planned maintenance is
-          announced in advance through the resources page. Where we fall short of a target, the service-credit terms in your
-          agreement apply.
+          You retain ownership of content you upload or create within the platform, subject to the intellectual property terms of
+          your underlying engagement (see the Professional Services Agreement and the corporate site&apos;s IP Ownership page).
+          Palette Canvas stores and processes this content solely to operate the platform and deliver the engagement — not for any
+          independent use.
         </p>
       </Clause>
 
-      <Clause heading="6. Suspension and termination">
+      <Clause heading="4. Platform availability">
         <p>
-          You may stop using the workspace at any time. We may suspend access where necessary to protect the service or other
-          customers, or where these terms are materially breached.
+          Palette Canvas takes reasonable measures to keep the platform available but does not guarantee uninterrupted access.
+          Planned maintenance windows are communicated in advance where practical.
         </p>
         <p>
-          On termination, your data is retained only for the retention period your organisation has configured, unless a legal hold
-          requires longer. Exports are available before that window closes.
-        </p>
-      </Clause>
-
-      <Clause heading="7. Liability">
-        <p>
-          Nothing here excludes liability that cannot lawfully be excluded. Subject to that, our liability is limited to the amounts
-          set out in your master services agreement.
+          This section does not constitute a formal SLA. A formal uptime commitment, if one applies to your engagement, is set out
+          in your Professional Services Agreement, not here.
         </p>
       </Clause>
 
-      <Clause heading="8. Governing law">
-        <p>These terms are governed by the law of England and Wales, and the courts of England and Wales have exclusive jurisdiction.</p>
+      <Clause heading="5. Termination of access">
+        <p>
+          Access is tied to an active engagement or an explicitly time-boxed Guest link. Palette Canvas may suspend or terminate
+          platform access on engagement end, on reasonable suspicion of a Section 2 violation, or as otherwise set out in your
+          Professional Services Agreement.
+        </p>
+        <p>Guest access expires automatically per its stated expiry without requiring manual action by either party.</p>
+      </Clause>
+
+      <Clause heading="6. Changes to these terms">
+        <p>Palette Canvas may update these terms; continued platform use after a change constitutes acceptance of the update.</p>
+      </Clause>
+
+      <Clause heading="7. Contact">
+        <p>
+          Questions about these terms: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+        </p>
       </Clause>
     </LegalPage>
   );

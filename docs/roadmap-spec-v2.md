@@ -10,12 +10,20 @@ Source of truth for what already exists: `docs/gap-analysis-spec-v2.md` (Phase 0
 Every step lists **scope → exit criteria → tests** and lands behind a PR with
 evidence per `AGENTS.md`.
 
-**Status: Phases 0-6 complete.** Phases 1-6 merged in PR #22
+**Status: Phases 0-6 complete, then corrected.** Phases 1-6 merged in PR #22
 (`v2-boards-comms-public-surface`, commit `ba22fda`); per-id evidence is in
-`docs/roadmap-ledger.md`. Two items remain human decisions and are *not* closed
-by that merge: the LLM provider host (§12.3 — the seam is built and no-ops
-without a key) and legal finalisation (§15 — pages are drafts carrying explicit
-counsel-review caveats). Frontend polish still awaits the asset zip.
+`docs/roadmap-ledger.md`. Phase 6 was then materially corrected by the SPA rows
+when the authoritative specification package arrived — see "Phase 6 correction"
+below. Three items remain human decisions and are *not* closed by those merges:
+the LLM provider host (§12.3 — the seam is built and no-ops without a key), the
+email transport provider (which gates the whole A-block), and legal finalisation
+(§15 — pages are drafts carrying explicit counsel-review caveats). The hosting
+region decision determines the §15.2 residency wording.
+
+**Next work is scoped in `docs/roadmap-ledger.md` → "Next phases"** (N1 identity
+chain, N2 board/comms frontend, N3 operational maturity). This file remains the
+source of truth for *what was specced*; the ledger is the source of truth for
+*what is next*.
 
 ---
 
@@ -112,13 +120,40 @@ Independent of Phases 1–5; good parallel-track work.
 
 | # | Scope | Exit criteria | Tests |
 | --- | --- | --- | --- |
-| V2-6.1 | **Visual language** (§8.1) — planned palette, corrected against the mockup (ink `#131021`, raise `#1c1830`, cobalt `#4f7dff`, violet `#9471cb`, magenta `#d66599`) | tokens + CSS mirror the spec colours | snapshot |
+| V2-6.1 | **Visual language** (§8.1) — palette derived from the supplied logo mark: ramp `#7876e0 → #9471cb → #ba6aae → #cd67a0 → #d66599`, ink `#131021`, raise `#1c1830`, accent `#4f7dff` | tokens + CSS mirror the mark's own fills | snapshot |
 | V2-6.2 | **Landing page** (§8.2) — header, hero slider, info cards, how-it-works, footer, social links | all five sections render; links resolve | e2e: routes 200 |
 | V2-6.3 | **Sign-up branching** (§8.3) — employee request / partner agency / no guest self-serve | three paths expressed, guest has none | e2e: path mapping |
 | V2-6.4 | **Terms / Privacy / Accessibility** (§15.1–15.3) | three pages render spec content incl. honest UK-data + a11y caveats | e2e: routes 200 |
 | V2-6.5 | **Resources / What's New** (§15.4) | status + in-development + recently-shipped sections | snapshot |
 
 **Exit:** public surface live. Net-new 600–690.
+
+---
+
+## Phase 6 correction — authoritative package alignment (SPA) ✅
+
+Phase 6 was specified and built from the PDF *summary*. The full specification
+package (`full-specification-source/`, the logo SVGs, the CSS mockups, the
+contact details and the standalone legal drafts) arrived afterwards and
+contradicted it in four material ways. V2-6.1–6.5 above are therefore marked
+"corrected"; the SPA rows in `docs/roadmap-ledger.md` carry the detail and the
+gates.
+
+| Correction | V2-6.x said | Authoritative source says |
+| --- | --- | --- |
+| Brand ramp | 3-stop gradient starting at accent `#4f7dff` (`cobalt`) | 5-stop ramp `#7876e0 → #9471cb → #ba6aae → #cd67a0 → #d66599`; `#4f7dff` is the accent centre dot of the mark |
+| Landing cards | 7 cards of marketing copy | §8.2: **six** cards, one per core capability (Boards & Views, Dashboards, Communication, AI Agents, Compliance, Integrations) |
+| Sign-up | 3 paths incl. a Guest card | §8.3: two requestable paths; Guest has **no** sign-up path by design |
+| Legal pages | governing law "England and Wales", UK data location, WCAG **2.2** | drafted POPIA-first content, **WCAG 2.1 AA**, and residency tied to the hosting decision (Render per the user directive; AWS `af-south-1` superseded) |
+
+The underlying failure was process, not just content: `scripts/public-surface-check.sh`
+asserted the *invented* strings, so the gate passed the fabrications. Its
+`$(fetch A; fetch B; cat file)` idiom also clobbered a shared temp file and
+silently checked one page twice. Both are fixed, and the corrected check now
+carries a negative guard that fails if the invented content returns.
+
+**Exit:** public surface matches the authoritative package; logo assets shipped;
+token contract derived from the real SVG. Net-new ~200 LOC changed, no new scope.
 
 ---
 

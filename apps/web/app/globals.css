@@ -65,6 +65,8 @@
   --serif: var(--font-serif, 'Fraunces'), Georgia, serif;
   --mono: var(--font-mono, 'IBM Plex Mono'), 'SFMono-Regular', Consolas, monospace;
   --sans: var(--font-sans, 'Manrope'), 'Avenir Next', 'Segoe UI', sans-serif;
+  /* Public-surface display face (§8.1 mockups use Poppins headings). */
+  --display: var(--font-display, 'Poppins'), 'Avenir Next', 'Segoe UI', sans-serif;
 
   /* Geometry */
   --radius-sm: 6px;

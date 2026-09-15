@@ -106,11 +106,26 @@ who (or which agent) did it, and what remains. For scope definitions see
 | V2-5.3 | Brief Analysis Agent | done | PR #22 | e2e propose-only records a proposal (16–25 h range), does not apply; human confirm via `ai.review` (ops director) | set `propose-only`; storage blocked while org opted out |
 | V2-5.4 | KPI/Reminder Agent | done | PR #22 | e2e act-and-log reminder applies without approval, raises notification, does not mutate the item | `recipient_id` notification write |
 | V2-5.5 | LLM provider seam (§12.3) | done | PR #22 | e2e catalog reports provider unconfigured + name `none` without env keys; absent key is a graceful no-op | `apps/api/src/llm/llm.provider.ts`; OpenAI-compatible provider behind `PC_LLM_API_KEY`/`BASE_URL`/`MODEL`; provider choice is a human decision, left unconfigured |
-| V2-6.1 | Visual language (§8.1) | done | PR #22 | `packages/design-tokens/test/tokens.test.ts` snapshot passes and fails on drift (verified by injecting `#4a74ed` → `brandRamp.cobalt drifted`); sample of `fig-8.1-landing-mockup.png` confirms `#131021`/`#1c1830`/`#4f7dff`/`#9471cb`/`#d66599`; web build exit 0 | additive to `packages/design-tokens`; app scales untouched. Note: `docs/roadmap-spec-v2.md` had cited `#4a74ed`/`#706ed0`/`#c65e8f` for cobalt/violet/magenta — corrected against the mockup |
-| V2-6.2 | Landing page (§8.2) | done | PR #22 | public-surface check: all five sections present (`Every campaign`, `Built for the whole delivery`, `How it works`, `Two ways in`, `Follow along`); route 200; renders without the app shell | `/` moved to public landing; workspace overview moved to `/dashboard` |
-| V2-6.3 | Sign-up branching (§8.3) | done | PR #22 | public-surface check: three paths present (Employee / Partner agency / Client or third party) and the page states there is no guest self-serve | guest has no self-serve path by design |
-| V2-6.4 | Terms / Privacy / Accessibility (§15.1–15.3) | done | PR #22 | public-surface check: three routes 200 with spec content (terms incl. governing law; privacy incl. UK data location; accessibility incl. WCAG 2.2 target, known gaps, and an explicit not-yet-counsel-reviewed caveat) | explicit draft/legal-review caveats per roadmap rule "legal-finalisation is a human decision" |
-| V2-6.5 | Resources / What's New (§15.4) | done | PR #22 | public-surface check: status + in-development + recently-shipped sections present, incl. `Not configured` for the unconfigured agent provider | honest status rather than aspirational |
+| V2-6.1 | Visual language (§8.1) | done | PR #22 → corrected SPA-01 | `packages/design-tokens/test/tokens.test.ts` snapshot passes and fails on drift (verified by injecting `#4a74ed` → `brandRamp.cobalt drifted`); sample of `fig-8.1-landing-mockup.png` confirms `#131021`/`#1c1830`/`#4f7dff`/`#9471cb`/`#d66599`; web build exit 0 | additive to `packages/design-tokens`; app scales untouched. Note: `docs/roadmap-spec-v2.md` had cited `#4a74ed`/`#706ed0`/`#c65e8f` for cobalt/violet/magenta — corrected against the mockup |
+| V2-6.2 | Landing page (§8.2) | done | PR #22 → corrected SPA-04 | public-surface check: all five sections present (`Every campaign`, `Built for the whole delivery`, `How it works`, `Two ways in`, `Follow along`); route 200; renders without the app shell | `/` moved to public landing; workspace overview moved to `/dashboard` |
+| V2-6.3 | Sign-up branching (§8.3) | done | PR #22 → corrected SPA-05 | public-surface check: three paths present (Employee / Partner agency / Client or third party) and the page states there is no guest self-serve | guest has no self-serve path by design |
+| V2-6.4 | Terms / Privacy / Accessibility (§15.1–15.3) | done | PR #22 → corrected SPA-03 | public-surface check: three routes 200 with spec content (terms incl. governing law; privacy incl. UK data location; accessibility incl. WCAG 2.2 target, known gaps, and an explicit not-yet-counsel-reviewed caveat) | explicit draft/legal-review caveats per roadmap rule "legal-finalisation is a human decision" |
+| V2-6.5 | Resources / What's New (§15.4) | done | PR #22 → corrected SPA-05 | public-surface check: status + in-development + recently-shipped sections present, incl. `Not configured` for the unconfigured agent provider | honest status rather than aspirational |
+
+### SPA — Authoritative specification-package alignment (2026-09-15)
+
+Supersedes the V2-6.x content rows above. The authoritative package arrived
+after PR #22 merged; V2-6.1–6.5 had been written from the PDF *summary*, and
+several values and facts in them were reconstructed rather than sourced. These
+rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
+
+| ID | Scope | Status | Commit | Gates | Notes |
+| --- | --- | --- | --- | --- | --- |
+| SPA-01 | Brand ramp corrected to the supplied mark (§8.1) | done | PR #24 | `tokens.test.ts` now derives the contract from the shipped SVG: it reads `/brand/palette-canvas-logo-mark.svg`, asserts every hex fill is a declared ramp colour, and requires indigo/magenta/accent to be present; negative-tested by injecting `#123456` into `brandRamp.indigo` → `brandRamp.indigo drifted`; 6 mark fills verified | authoritative 5-stop ramp `#7876e0 → #9471cb → #ba6aae → #cd67a0 → #d66599`; `#4f7dff` is the accent **centre dot**, not the gradient start. V2-6.1's 3-stop accent gradient and `cobalt` key were wrong. `brandDotsCompact` added for the mockup's compact lockup |
+| SPA-02 | Logo assets from the package replace the hand-drawn mark | done | PR #24 | landings/legal/footer render `/brand/palette-canvas-logo-horizontal.svg`; public-surface check OK; build exit 0 | `palette-canvas-logo-mark.svg` + `palette-canvas-logo-horizontal.svg` in `apps/web/public/brand/`; `BrandDots` (inline spans) removed, `BrandLockup` (real asset) adopted |
+| SPA-03 | Legal pages rebuilt from the authoritative drafts (§15.1–15.3) | done | PR #24 | public-surface check asserts `WCAG 2.1 Level AA`, `POPIA`, `Render`, the real contact address, and the UK-data open item; a fabrication guard scans all three pages for `England and Wales` / `WCAG 2.2` / `United Kingdom` / `Governed by the laws of` and fails the gate if any reappears (verified by injecting a governing-law clause → gate failed) | PR #22 shipped invented content: a governing law of England and Wales, a UK data location, and a WCAG 2.2 target. Authoritative drafts say **WCAG 2.1 AA**, POPIA-first, and — per the user directive to ignore the AWS instruction — **Render** hosting rather than AWS `af-south-1`. The UK GDPR/POPIA question is carried as an explicit open item, not silently decided |
+| SPA-04 | Landing page aligned to §8.2 / `landing-page-mockup.html` | done | PR #24 | public-surface check asserts the six card titles (`Boards & views`, `Dashboards`, `Communication`, `AI agents`, `Compliance`, `Integrations`) plus `Intake to handover` / `How it works` / `Two ways in`; route 200; no app shell | §8.2 requires one card per core capability — exactly six. PR #22 shipped seven cards sized around generic marketing copy ("Every campaign…", "Know the floor…", "Agents propose…"). Meta description and `metadata.title` corrected from the app's internal wording to the public product positioning |
+| SPA-05 | Sign-up corrected to §8.3 and fonts to the mockup; resources made honest | done | PR #24 | public-surface check asserts the two requestable paths and the Guest boundary, and still asserts no guest self-serve statement is missing; build exit 0 | §8.3 is explicit that Guest has **no** sign-up path — PR #22 shipped three cards including a Guest one. Now two requestable paths plus an explicit Guest boundary. Poppins added as `--font-display` for the public surface (mockup uses Poppins/Inter/IBM Plex Mono; the app keeps Fraunces/Manrope). `contact.ts` centralises the package's real contact address. `scripts/public-surface-check.sh` also gained a `body_of` helper: its old `$(fetch A; fetch B; cat file)` idiom clobbered the shared temp file and silently checked one page twice — the reason the fabrications passed CI in the first place |
 
 ## Recently completed detail
 
@@ -313,19 +328,102 @@ who (or which agent) did it, and what remains. For scope definitions see
 
 ## Open gaps (module-level, excerpt)
 
-Superseded for *new* work by `docs/roadmap-spec-v2.md` (Phases 0–6, all done) and
-the A-block. Retained for the pre-V2 backlog still genuinely open:
+Superseded for *new* work by `docs/roadmap-spec-v2.md` (Phases 0–6, all done,
+then corrected by the SPA rows) and the A-block. Retained for the pre-V2 backlog
+still genuinely open:
 
 1. **Object storage backend** — the V2 `files` model and version chains are
-   built (PR #22), but storage is still URI-only: thumbnails, signed URLs and
-   comparison views hang on a real bucket.
-2. **Queue + notifications** — notifications emit synchronously; V1 needs a
-   queue so delivery is reliable.
+   built (PR #22) and the API exposes S3-shaped `put`/`read` plus HMAC signed
+   URLs, but the backend is still local disk. Raster thumbnailing records
+   `pending-external-worker`; producing real raster renditions, and serving
+   asset bytes from a bucket rather than the API's disk, hang on this decision.
+2. **Queue + notifications** — ~~notifications emit synchronously; a queue is
+   needed~~ **stale: P6-11 (PR #12) added a PG `SKIP LOCKED` queue with backoff
+   retry, DLQ and idempotency, and P7-03 delivers reminders through it.** What
+   remains open is *outbound delivery transport* (see item 5).
 3. **Skills/availability workload** — the workload page is totals only; PDF V1
-   wants thresholds, skills, availability, auto-balance.
-4. **Integrations + automation hub** — rules, webhooks, API keys, import,
-   export — none built.
-5. **Identity hardening** — header auth remains (A-02 email transport is the
-   keystone: A-03/A-04/A-05/A-10 all depend on it); SSO/SCIM/MFA are V1.
+   wants thresholds, skills, availability, auto-balance. Genuinely open.
+4. **Integrations + automation hub** — ~~none built~~ **stale: P6-04 added
+   webhook CRUD, P6-08 a rules DSL on the event bus, P7-04 API keys, P7-06
+   integration health, and P8-11 an export log — all in PRs #12/#14/#18.** Open
+   work is limited to third-party OAuth connectors (Adobe/Canva/Dropbox, §13.4)
+   and import/export *fidelity* beyond the dry-run validator (A-12).
+5. **Identity hardening** — header auth remains, and it is now the keystone
+   gap: A-02 (real login/session) is code-complete but blocked on email
+   transport; A-03/A-04/A-05/A-10 all sit behind A-02. A decision on the
+   email provider is the single highest-leverage unblock available.
+6. **Hosting region** — `render.yaml` exists with no region pinned. Every
+   residency claim in §15.2 the privacy page is now tied to this decision (the
+   page says Render and flags the UK question as open rather than asserting a
+   location).
 
 ~~Dashboards~~ — delivered by V2 Phase 4 (PR #22), per the V2 rows above.
+~~Legal/resource pages~~ — delivered V2 Phase 6 (PR #22), corrected by SPA-03/05.
+
+## Next phases
+
+Priorities here are ordered by *leverage* — what unblocks the most downstream
+work — rather than by roadmap number. P8, A-01 and V2 Phases 1–6 are all done;
+what remains is the A-block (A-02…A-16), the platform-surface long tail, and the
+V1 scale targets from `docs/roadmap.md` Phase 6.
+
+### Immediate — N1: unblock the identity chain (A-02 → A-03 → A-04)
+
+The whole remaining A-block stacks on one missing piece. Recommended split into
+reviewable slices, each its own PR per `AGENTS.md`:
+
+| Slice | Scope | Depends on | Test shape |
+| --- | --- | --- | --- |
+| N1.1 | Email transport provider abstraction (§0.2) with a dev fallback that logs to `email_outbox`; **no real provider selected** | human provider decision | e2e: outbox row written, send is a no-op without config |
+| N1.2 | A-02 verification + login/session hardening: enforce `verified_at` at login, single-use token (410 on reuse), resend throttle, session expiry | N1.1 | e2e: verify flips, reuse 410, unverified login 403, expired session 401 |
+| N1.3 | A-03 password reset/change + session revocation, all audited | N1.2 | e2e: reset round-trip, expired token 410, old session 401 |
+| N1.4 | A-04 member invites/directory/roles admin UI over the A-01/A-02 API (supersedes the P8-01 API-only invite) | N1.3 | e2e: invite→accept→binding, revoke, admin-only 403; browser pass |
+
+**Human gate:** which email provider (SMTP relay / Resend / SES) and whether the
+dev-log fallback is acceptable for the pilot. The agent builds against the
+abstraction either way and records the decision in `docs/decisions/`.
+
+### Next — N2: test-harness determinism, then the frontend board surface
+
+| Slice | Scope | Depends on | Test shape |
+| --- | --- | --- | --- |
+| N2.1 | Make `public-surface-check.sh` part of `npm test` rather than an optional script, and document the `body_of` clobbering class of bug in `AGENTS.md` so it is not reintroduced | — | `npm test` fails when a public page drifts |
+| N2.2 | A-14 board UI: DnD board moves, timeline/Gantt, subtasks, global search over the V2 §9 model | SPA-01 tokens | e2e + browser: board moves persist, search highlights |
+| N2.3 | Surface the V2 comms layer (§11) in the web app — channels, threads, mentions, meetings | N2.2 | browser pass; internal channel hidden from client |
+
+### Then — N3: honesty and operational maturity
+
+| Slice | Scope | Depends on | Test shape |
+| --- | --- | --- | --- |
+| N3.1 | Storage backend behind the existing S3-shaped seam; real raster thumbnails | human storage decision | e2e: asset round-trip from bucket, thumbnail rendition produced |
+| N3.2 | A-13 webhook hardening (HMAC verify), rate limits, retention enforcement | N1.1 | e2e: bad signature 401, 429 on burst, retention purge |
+| N3.3 | A-12 public API versioning + importer apply (beyond the dry run) | P7-04, P8-11 | e2e: versioned key call; dry-run then apply |
+| N3.4 | A-16 observability + DR drill refresh; re-run the backup/restore and load drills against the current schema (they were last run at 55 e2e checks) | N3.1 | drill reports committed; p95 < 1000 ms |
+
+### Explicitly deferred, and why
+
+- **A-09 billing (Stripe)** and **A-08 plan catalogue** — both sit behind the
+  human pricing/plan decisions flagged in `docs/gap-analysis-platform-surface.md`
+  §0.3. No agent progress is possible until those are made.
+- **A-15 mobile/PWA and L10N** — depends on A-07, which depends on A-04.
+- **Real identity-provider exchange** (Keycloak brokering, §8.4) — the seam and
+  the dev stub exist (P6-06, P7-02). Replacing the stub is an infrastructure
+  decision, not a coding one.
+- **LLM provider host** (§12.3) — the seam is built and no-ops without a key;
+  the page correctly reports `Not configured`.
+
+### Phase gates still unmet (from `docs/roadmap.md`)
+
+| Gate | Target | Actual | Status |
+| --- | --- | --- | --- |
+| LoC | ≥ 80k (Phase 6 exit) | ~23k | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new |
+| e2e | ≥ 320 checks | 326 | met |
+| Permission tests | pass | pass | met |
+| Drift | 0 findings | 0 | met |
+
+
+> **Correction.** An earlier note in this file listed 15 pre-V2 backlog items as
+> still open, including "Integrations + automation hub — none built". That was
+> wrong: P6-04/P6-08/P7-04/P7-06/P8-11 shipped them across PRs #12/#14/#18 and
+> the ledger rows above say so. The stale list is annotated inline above rather
+> than deleted, so the correction itself is visible.

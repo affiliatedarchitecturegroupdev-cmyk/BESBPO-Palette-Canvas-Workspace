@@ -43,7 +43,11 @@ Prefer small, well-specified slices: "Add board permission tests for vendor and 
 
 - Postgres is required for API tests and boot: local Docker container
   `pc-pg` (`postgres:17`, user `palette_canvas`, password `devpassword`, db
-  `palette_canvas`). Docker daemon may need `sudo dockerd -g` style bootstrap.
+  `palette_canvas`). Bootstrap: run `sudo dockerd` in the background (plain — it
+  takes no `-g` flag), then `sudo docker run -d --name pc-pg
+  -e POSTGRES_USER=palette_canvas -e POSTGRES_PASSWORD=devpassword
+  -e POSTGRES_DB=palette_canvas -p 5432:5432 postgres:17`. All `docker` calls
+  need `sudo` in this environment.
 - Migrations live in `apps/api/migrations/` and run at boot, in seed, and in
   e2e, via the idempotent runner in `apps/api/src/db/migrate.ts`. Path
   discovery uses `apps/api/src/db/paths.ts` (`migrationsDir`).
@@ -63,3 +67,20 @@ Prefer small, well-specified slices: "Add board permission tests for vendor and 
   `docs/roadmap.md` only if scope actually changed.
 - **No phase skipping**: roadmap steps execute in order; blocked entries stay
   `blocked` with a note rather than disappearing.
+
+## Specification-source discipline
+
+- The authoritative specification package lives outside the repo (supplied as a
+  Dropbox ZIP). Work from `full-specification-source/` and the supplied assets
+  and legal drafts — **not** from a PDF summary or from memory. Public-surface
+  content once shipped from summary-level reading and invented a governing law,
+  a data region and a WCAG version; all three were wrong.
+- When a user directive contradicts the spec package (e.g. Render instead of
+  AWS, or an ignored infra instruction), the user directive wins. Record the
+  substitution in `docs/roadmap-ledger.md` next to the affected id.
+- Never let a verification script assert strings that were themselves invented.
+  A gate that encodes fabricated content cannot detect it. Keep negative guards
+  that fail when known-bad content reappears.
+- When a shell script captures a page body, use a helper that reads the body for
+  exactly one URL (`body_of`). The `$(fetch A; fetch B; cat $file)` idiom
+  clobbers a shared temp file and silently checks the wrong page.
