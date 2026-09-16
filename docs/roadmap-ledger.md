@@ -83,7 +83,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | A-11 | Onboarding wizard, template marketplace, demo, help | todo | — | — | depends A-04 |
 | A-12 | Public API versioning, importers, exporters | todo | — | — | depends P7-04 (keys), P8-11 |
 | A-13 | Webhook hardening, rate limits, retention enforcement, health/status | todo | — | — | depends §0.5, P6-11 |
-| A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | in-review | PR #26 `93a21f7` (moves + search); N2.2a pending | DnD moves + global search done under N2.2 (374 passed / 0 failed; browser pass). Timeline/Gantt renderer, subtasks, and swimlanes remain (N2.2a) | Partial by design. The §9 data model is complete — `subitem`/`parent_item_id`, `ViewType.Gantt`, and `assertViewConfig` for `date_column_id` all exist; what is missing is service + renderer code, not schema. Row stays open until those land |
+| A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | in-review | PR #26 `93a21f7` (moves + search); PR #27 (timeline/subtasks/swimlanes) | DnD moves + global search under N2.2 (374 passed / 0 failed). Subtasks, timeline/Gantt, and swimlanes under N2.2a (401 passed / 0 failed; browser pass incl. subtask persistence + timeline render; read-only role refused) | All four blocks now shipped end-to-end, pending human merge of PR #27. The §9 data model was already complete (`subitem`/`parent_item_id`, `ViewType.Gantt`, `assertViewConfig` `date_column_id`); N2.2a added the service + renderer code against it with no migration |
 | A-15 | Mobile/PWA, whitelabel, widgets, L10N | todo | — | — | depends A-07, §9 |
 | A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | todo | — | — | continuous |
 | UI-01 | Web UI/UX advancement — scalable + mobile-first | done | PR #21 `c76d68c` | CI "Build + tests + gates" green on PR #21; root build exit 0; e2e 239/239; drift 0; LoC 18,039; browser QA on work-1 (dashboard, calendar, settings, help, reports, workload, capacity, commercial, projects, audit all render with seeded data); DataTable server-safe fix (no event handlers across AppShell client boundary) | new `/` dashboard (KPIs + intake attention + project pulse + dispatch), `/calendar` delivery timeline, `/settings` hub, `/help`; shared PageHeader/Badge/DataTable/StatCard/Card/ProgressBar/EmptyState; mobile-first CSS (stacked card rows, compact header, bottom quick-nav); `agentRules:false` |
@@ -132,6 +132,70 @@ rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
 | N1.4 | A-04 members/invites/roles admin surface | done | PR #25 `b25e715` | e2e: binding created on accept, invite reuse 409, pending-invite revoke → token 409, member revoke drops bindings, revoked member 403 on `/projects`, self-revoke 403, client 403 on member list, revocation audited; 365 passed / 0 failed. Browser: admin sees members + invites; non-admin sees a restricted notice | `GET /directory/members`, `DELETE /directory/members/:personId/roles`; `/settings/members` + `MemberActions.tsx`. Invite tokens are surfaced in the UI because there is still no mail transport (ADR-0002 D1) — an admin has to hand the token over manually |
 | N2.1 | Public-surface check moved into `npm test`; `body_of` clobbering documented | done | PR #25 `b25e715` | `npm test` now runs `test:public-surface` → `scripts/public-surface-gate.sh`, which boots the built app on an ephemeral port and rebuilds when sources are newer than `BUILD_ID`; negative-tested by removing `POPIA` from the privacy page → gate failed exit 1; green when restored; CI step for the standalone check removed as redundant | The check was a separate CI step nobody ran locally, which is how fabricated legal content reached `main`. Gate lives with the tests now, so a local `npm test` catches the same drift CI does |
 | N2.2 | A-14 board moves + global search (API + web) | done | PR #26 `93a21f7` | e2e: move between groups lands in the destination; reorder before a sibling leaves a gap-free ordered list; `beforeItemId` outside the destination group 400; guest move 403; move audited; search finds by name, empty on no match, guest search returns nothing; 374 passed / 0 failed. Browser: `/boards` lists, `/boards/:id` renders groups + status labels, ⌘K search returns "Acme launch film" | `POST /boards/items/:itemId/move` (park-then-reorder) and `GET /boards/search`, hoisted above `@Get(':id')` so `search` is not read as a board id. `apps/web/app/boards/*` + `KanbanView.tsx` (optimistic reorder mirroring the server rule, rollback on rejection) + `GlobalSearch.tsx`. Timeline/Gantt and subtasks split to N2.2a. Correction: `subitem` + `parent_item_id` **do** exist in migration 010 — the gap is that no service or UI code reads them, not a missing migration |
+| N2.2a | A-14 follow-up: subtasks, timeline/Gantt renderer, swimlanes | in-review | PR #27 | e2e: subitem round-trip with parent/engagement inheritance; subitem column validation (labels required, unknown type 400); subitem write scoped to parent (cross-board column rejected); guest subitem read/write 403; timeline 404 with no gantt/calendar view; bad `date_column_id` 400; date cell → one-day bar; `{from,to}` → spanned bar; unscheduled items reported with reason, not dropped; unparseable date yields no bar; guest timeline 403; `board.subitem_column_added` / `group.created` / `group.updated` audited; **401 passed / 0 failed**. Browser: kanban nests subtasks under parents; adding a subtask persists through reload; timeline tab renders swimlanes + date range + unscheduled list; read-only role sees no add form and a capability notice | Service + controller + web only, no migration (`subitem`/`subitem_column`/`board_group`/`board_view` already in 010). `readDateSpan` accepts both `date` (ISO string) and `timeline` (`{from,to}`) shapes and returns null for anything else, so the caller reports rather than guesses. Timeline resolves its date source from the view's `config.date_column_id` — it never picks a column itself |
+
+## Recently completed detail
+
+### N2.2a — A-14 subtasks, timeline/Gantt, swimlanes (2026-09-16)
+
+- Branch: `n2.2a-timeline-subtasks-swimlanes` (PR #27), branched from `main` at `93a21f7`
+  (PR #26). No migration: `subitem`, `subitem_column`, `board_group`, and
+  `board_view` all shipped in `010_v2_core_model.sql`; the gap N2.2 disclosed was
+  service + renderer code, and that is all this slice adds.
+- API (`boards.service.ts` / `boards.controller.ts`):
+  - Subitems are read through `getItem(parentItemId)`, so the parent's
+    engagement boundary applies to its children. A subitem is not a side door
+    around `canSeeEngagement`.
+  - `createSubitem` inherits `engagement_id` from the parent rather than
+    accepting it from the caller — otherwise a subitem could be stamped into an
+    engagement the writer cannot see.
+  - `validateSubitemValues` rejects any column id not on the board's
+    `subitem_column` set, so a parent's board column cannot be used as a subitem
+    column. Subitem columns are their own smaller set per §9.3, not a copy.
+  - `moveSubitem` reuses the park-then-reorder shape from `moveItem` and
+    requires `beforeSubitemId` to share the parent — a sibling in another list
+    would order against the wrong sequence.
+  - Guests (`ctx.itemScope`) are refused subitem writes explicitly; reads go
+    through the parent's `getItem`, which already gates them.
+  - `timeline` prefers an explicit `?viewId`, else falls back to the first
+    `gantt` then `calendar` view; no such view is 404, a non-timeline view 400,
+    and a `date_column_id` outside the board 400.
+- `readDateSpan` — the one genuinely non-obvious piece. Both shapes the spec
+  allows are accepted: a `date` cell is a single ISO string (one-day bar), a
+  `timeline` cell is `{from,to}`. Anything else — a number, free text, a
+  malformed object — returns null so the item lands in `unscheduled` with a
+  reason. Reversed ranges collapse to the start rather than drawing a negative
+  bar. Silently dropping undated work would make the timeline look emptier than
+  the board is.
+- Audit: `subitem.created/updated/moved/deleted`, plus `group.created`,
+  `group.updated`, and `board.subitem_column_added`. The last two were added
+  during review — `addColumn` and `board.created` already audit, so creating a
+  group or a subitem column without one would have been an inconsistency, not a
+  judgement call.
+- Web: `SubtaskList.tsx` (subtasks under each card, `onDragStart` prevented so
+  the card's drag does not hijack the input), `TimelineView.tsx` (swimlanes as
+  horizontal bands on one shared time axis, so a date sits at the same x in
+  every lane; one-day bars get a 1.5% floor width; unscheduled list below),
+  `BoardViews.tsx` (Kanban/Timeline switcher). The Timeline tab only renders
+  when the server produced a payload — offering a tab that 400s on click is
+  worse than not offering it.
+- Board page fetches `subitems()` per item and `timeline()` once, tolerating
+  404 as "no timeline configured" rather than an error.
+- Gates: `npm run build` exit 0; **e2e 401 passed / 0 failed**; public-surface
+  gate OK; drift 0 findings across 105 rows; `scripts/loc.sh` 26,932 LoC /
+  228 files.
+- Browser QA (dev identity `ops@besbpo.example`): kanban renders subtasks nested
+  under their parents with a count; adding "Browser QA subtask" to "Final
+  lockups" persisted through a reload and appeared in `subitem` on the correct
+  parent; the Timeline tab rendered swimlanes, the date range header, and the
+  unscheduled list. Read-only check with `qa@besbpo.example` on an
+  engagement-less board: no add form, and the notice "Moving items requires the
+  items.write capability" instead. Cross-org board access as
+  `client-a@nimbus.example` returned the board-unavailable state.
+- Note on reproducing the read-only check: `/boards` is engagement-scoped for
+  non-org-wide readers (pre-existing N2.2 behaviour in `listBoards`), so a
+  same-org reviewer sees `[]` on an engagement board. A board with no
+  `engagement_id` is the way to exercise the non-writer path.
 
 ## Recently completed detail
 
@@ -181,7 +245,9 @@ rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
   `parent_item_id` in migration 010, `ViewType.Gantt`, and
   `assertViewConfig`'s `date_column_id` requirement — so the remaining work is
   service + renderer code, not a migration. Claiming all four in one PR would
-  have overstated coverage.
+  have overstated coverage. **Landed in N2.2a (see that entry):** subitems,
+  timeline/Gantt, and swimlanes all shipped against this same schema with no new
+  migration.
 
 ### V2 Phases 1–6 — boards, comms, dashboards, agents, public surface (2026-09-15)
 
@@ -452,6 +518,11 @@ abstraction either way and records the decision in `docs/decisions/`.
 | N2.2a | A-14 follow-up: timeline/Gantt renderer, subtasks, swimlanes | N2.2 | e2e: subtask parent/child round-trip; Gantt view renders off `date_column_id` |
 | N2.3 | Surface the V2 comms layer (§11) in the web app — channels, threads, mentions, meetings | N2.2 | browser pass; internal channel hidden from client |
 
+Status: N2.1 and N2.2 are **done**; N2.2a is **in review** as PR #27 (see the
+rows above). **N2.3 is the next unblocked slice** once PR #27 merges — its API
+already exists, so no schema or service work is expected; the risk is
+client-side re-implementation of the visibility filter (noted below).
+
 ### Then — N3: honesty and operational maturity
 
 | Slice | Scope | Depends on | Test shape |
@@ -496,7 +567,9 @@ product surface and the directory side of it:
   `packages/shared`, and `assertViewConfig` already requires `date_column_id`
   for both `gantt` and `calendar`. The real gap is that no service method or web
   renderer reads any of it — that is code work, not a migration. N2.2 shipped
-  moves + search only; the rest is N2.2a.
+  moves + search only; **N2.2a closed that gap** — subitems, the timeline/Gantt
+  renderer, and swimlanes all landed there against the existing schema, so no
+  part of the §9 collaboration surface remains unimplemented.
 
 **N2.3 — V2 comms surface.** The API exists (`comms.controller.ts`, channels +
 `channel_members`, internal-visibility boundary already e2e-tested as
@@ -520,8 +593,8 @@ on the server, which would be a security bug, not a UI bug.
 
 | Gate | Target | Actual | Status |
 | --- | --- | --- | --- |
-| LoC | ≥ 80k (Phase 6 exit) | ~37.6k (ts/tsx/sql/sh/js, excl. build dirs) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate |
-| e2e | ≥ 320 checks | 374 (N2.2) | met |
+| LoC | ≥ 80k (Phase 6 exit) | 26,932 (`scripts/loc.sh`, 228 files) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate. (An earlier row cited ~37.6k from a looser ts/tsx/sql/sh/js count; `loc.sh` is the gate's own measure and is used here) |
+| e2e | ≥ 320 checks | 401 (N2.2a) | met |
 | Permission tests | pass | pass | met |
 | Drift | 0 findings | 0 | met |
 
