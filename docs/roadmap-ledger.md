@@ -563,11 +563,13 @@ abstraction either way and records the decision in `docs/decisions/`.
 
 Status: N2.1 and N2.2 are **done**; N2.2a is **in review** as PR #27 (see the
 rows above). Once PR #27 merges, **N2.4 is the next slice** — a pre-existing
-board visibility gap found during the N2.2a browser pass, and a prerequisite for
-trusting the "hidden from client" claims that N2.3 and later surfaces will make.
-**N2.3 follows N2.4**; its API already exists, so no schema or service work is
-expected; the risk is client-side re-implementation of the visibility filter
-(noted below).
+board visibility gap found during the N2.2a browser pass, widened to cover
+meetings, and a prerequisite for trusting the "hidden from client" claims that
+N2.3 and later surfaces will make.
+**N2.3 follows N2.4.** Its API exists, so the slice is mostly web routes; but it
+is *not* purely UI — the scoping notes below identify membership and
+meeting-capability decisions that are service work, and the visibility filter
+must stay server-side. Settle those before or with the UI, not after.
 
 **N2.4 comes before N2.3 in priority despite the number.** N2.3 adds the first
 external-facing comms surface. The channels layer *does* enforce the §11.2
