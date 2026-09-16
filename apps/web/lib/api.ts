@@ -500,3 +500,67 @@ export interface InviteRow {
 export async function invites(email: string | null, all = false) {
   return api<InviteRow[]>(`/invites${all ? '?all=true' : ''}`, email);
 }
+/* ---------------- V2 boards (§9) ---------------- */
+
+export interface V2Board {
+  id: string;
+  workspace_id: string;
+  engagement_id: string | null;
+  name: string;
+  description: string | null;
+  is_template: boolean;
+}
+
+export interface V2Column {
+  id: string;
+  name: string;
+  column_type: string;
+  config: Record<string, unknown>;
+  semantic_role: string | null;
+  position: number;
+  is_system: boolean;
+}
+
+export interface V2Group {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface V2View {
+  id: string;
+  name: string;
+  view_type: string;
+  config: Record<string, unknown>;
+  is_default: boolean;
+}
+
+export interface V2Item {
+  id: string;
+  board_id: string;
+  group_id: string;
+  engagement_id: string | null;
+  name: string;
+  column_values: Record<string, unknown>;
+  position: number;
+}
+
+export interface V2BoardDetail {
+  board: V2Board;
+  columns: V2Column[];
+  groups: V2Group[];
+  views: V2View[];
+  items: V2Item[];
+}
+
+export async function boards(email: string | null) {
+  return api<V2Board[]>('/boards', email);
+}
+
+export async function boardDetail(email: string | null, boardId: string) {
+  return api<V2BoardDetail>(`/boards/${boardId}`, email);
+}
+
+export async function searchItems(email: string | null, query: string) {
+  return api<V2Item[]>(`/boards/search?q=${encodeURIComponent(query)}`, email);
+}

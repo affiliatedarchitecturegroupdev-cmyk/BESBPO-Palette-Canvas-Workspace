@@ -54,6 +54,14 @@ Prefer small, well-specified slices: "Add board permission tests for vendor and 
 - Dev auth: endpoints resolve the `x-user-email` header against `person` +
   `role_binding` rows; the web app forwards cookie `pc_user_email` as that
   header (Phase 5 hardening replaces with SSO).
+- **Known dev-mode hole (flagged, not silently changed):** `GET /identity/users`
+  (`apps/api/src/identity/identity.controller.ts`) takes no identity, applies no
+  capability check, and selects from `person` with no `org_id` filter. It serves
+  the dev user switcher, so it lists **every person in every organisation** to
+  any caller. It is a deliberate dev affordance and must not ship to any
+  shared environment; the Phase 5 SSO exchange is what removes it. Do not
+  "fix" it by adding a filter without the switcher's replacement, and do not
+  copy its shape into a new endpoint.
 - Permission gates are capability-based: `authz.require` /
   `authz.requireScope` (see `apps/api/src/identity/authz.service.ts`);
   capabilities map is in `packages/shared` (`_ROLE_CAPABILITIES`).

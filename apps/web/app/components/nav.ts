@@ -29,6 +29,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { href: '/dashboard', label: 'Overview', shortLabel: 'Home', exact: true },
       { href: '/intake', label: 'Intake inbox', capability: 'intake.read' },
       { href: '/projects', label: 'Projects', capability: 'projects.read' },
+      { href: '/boards', label: 'Boards', capability: 'boards.read' },
       { href: '/calendar', label: 'Calendar' },
       { href: '/workload', label: 'Workload', capability: 'workload.read' },
       { href: '/templates', label: 'Templates', capability: 'templates.read' },

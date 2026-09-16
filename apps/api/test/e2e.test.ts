@@ -2150,6 +2150,69 @@ async function main() {
       .map((c) => c.semantic_role)
       .filter(Boolean);
     check('cloning carries semantic roles forward', clonedRoles.includes('revenue_value'));
+
+    /* ---------------- V2: board moves + global search (§9) ---------------- */
+
+    console.log('\n-- V2: board moves + search (§9)');
+
+    // Second group on board A, created directly (no group endpoint yet).
+    const secondGroupId = 'aaaaaaaa-0000-4000-8000-00000000d002';
+    await pool.query('INSERT INTO board_group (id, board_id, name, position) VALUES ($1,$2,$3,1)', [
+      secondGroupId, boardAId, 'Review',
+    ]);
+
+    const moveSecond = await api(base, `/boards/${boardAId}/items`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'Second item' },
+    });
+    const secondItemId = (moveSecond.json as { id: string }).id;
+
+    const moved = await api(base, `/boards/items/${secondItemId}/move`, {
+      email: 'am@test.example', method: 'POST', body: { groupId: secondGroupId },
+    });
+    check('item moved to another group', moved.status === 201 && (moved.json as { group_id: string }).group_id === secondGroupId);
+
+    // Reorder within the destination: park a third item before the second.
+    const moveThird = await api(base, `/boards/${boardAId}/items`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'Third item', groupId: secondGroupId },
+    });
+    const thirdItemId = (moveThird.json as { id: string }).id;
+    const reordered = await api(base, `/boards/items/${thirdItemId}/move`, {
+      email: 'am@test.example', method: 'POST', body: { groupId: secondGroupId, beforeItemId: secondItemId },
+    });
+    check('item reordered before a sibling', reordered.status === 201);
+
+    const orderedItems = await pool.query<{ id: string }>(
+      'SELECT id FROM item WHERE group_id = $1 ORDER BY position', [secondGroupId],
+    );
+    check(
+      'reorder left a gap-free, correctly ordered list',
+      orderedItems.rows.length === 2 && orderedItems.rows[0].id === thirdItemId && orderedItems.rows[1].id === secondItemId,
+    );
+
+    const crossGroupBefore = await api(base, `/boards/items/${thirdItemId}/move`, {
+      email: 'am@test.example', method: 'POST', body: { groupId: secondGroupId, beforeItemId: v2ItemAId },
+    });
+    check('beforeItemId outside the destination group rejected', crossGroupBefore.status === 400);
+
+    const guestMove = await api(base, `/boards/items/${secondItemId}/move`, {
+      email: 'guest@acme.example', method: 'POST', body: { groupId: secondGroupId },
+    });
+    check('guest cannot move items (403)', guestMove.status === 403);
+
+    const moveAudit = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM audit_event WHERE action = 'item.moved' AND target_id = $1`,
+      [secondItemId],
+    );
+    check('item moves are audited', Number(moveAudit.rows[0].n) >= 1);
+
+    const searchHit = await api(base, '/boards/search?q=Acme', { email: 'am@test.example' });
+    check('search finds an item by name', Array.isArray(searchHit.json) && (searchHit.json as Array<{ name: string }>).some((r) => r.name === 'Acme launch film'));
+
+    const searchNoHit = await api(base, '/boards/search?q=zzz-nothing', { email: 'am@test.example' });
+    check('search with no match returns empty', Array.isArray(searchNoHit.json) && (searchNoHit.json as unknown[]).length === 0);
+
+    const searchGuest = await api(base, '/boards/search?q=Acme', { email: 'guest@acme.example' });
+    check('guest search returns nothing', searchGuest.status === 200 && (searchGuest.json as unknown[]).length === 0);
   } finally {
     await app.close();
     await pool.end();
