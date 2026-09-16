@@ -2213,6 +2213,165 @@ async function main() {
 
     const searchGuest = await api(base, '/boards/search?q=Acme', { email: 'guest@acme.example' });
     check('guest search returns nothing', searchGuest.status === 200 && (searchGuest.json as unknown[]).length === 0);
+
+    /* ------------- V2: subtasks, timeline/Gantt, swimlanes (§9.3/§9.5) ------------- */
+
+    console.log('\n-- V2: subtasks + timeline + swimlanes (§9.3/§9.5)');
+
+    // Swimlanes are board groups, which now have a real create surface rather
+    // than the direct insert the N2.2 block above still uses.
+    const newGroup = await api(base, `/boards/${boardAId}/groups`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'Post-production', color: '#7c3aed' },
+    });
+    const newGroupId = (newGroup.json as { id: string }).id;
+    check('swimlane group created', newGroup.status === 201 && Boolean(newGroupId));
+    const groupCollapsed = await api(base, `/boards/groups/${newGroupId}`, {
+      email: 'am@test.example', method: 'PATCH', body: { isCollapsed: true, name: 'Post-prod' },
+    });
+    check('swimlane collapse + rename persisted',
+      groupCollapsed.status === 200 &&
+      (groupCollapsed.json as { is_collapsed: boolean; name: string }).is_collapsed === true &&
+      (groupCollapsed.json as { name: string }).name === 'Post-prod');
+    const groupAudit = await pool.query<{ action: string }>(
+      `SELECT action FROM audit_event WHERE org_id = $1 AND target_id = $2 AND action IN ('group.created','group.updated')`,
+      [orgId, boardAId],
+    );
+    check('swimlane create + update are audited',
+      groupAudit.rows.some((r) => r.action === 'group.created') &&
+      groupAudit.rows.some((r) => r.action === 'group.updated'));
+    const groupGuest = await api(base, `/boards/${boardAId}/groups`, {
+      email: 'guest@acme.example', method: 'POST', body: { name: 'Nope' },
+    });
+    check('guest cannot create a swimlane (403)', groupGuest.status === 403);
+
+    // Subitem columns are the smaller set a subitem carries (§9.3).
+    const subCol = await api(base, `/boards/${boardAId}/subitem-columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Sub status', columnType: 'status', config: { labels: [{ id: 's1', text: 'Open' }] } },
+    });
+    const subColId = (subCol.json as { id: string }).id;
+    check('subitem column created', subCol.status === 201 && Boolean(subColId));
+    const subColAudit = await pool.query<{ action: string }>(
+      `SELECT action FROM audit_event WHERE org_id = $1 AND target_id = $2 AND action = 'board.subitem_column_added'`,
+      [orgId, boardAId],
+    );
+    check('subitem column creation is audited', subColAudit.rows.length >= 1);
+
+    const subColBad = await api(base, `/boards/${boardAId}/subitem-columns`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'Broken', columnType: 'status' },
+    });
+    check('subitem column without labels rejected', subColBad.status === 400);
+
+    // Subtask round-trip under a real parent item.
+    const subOne = await api(base, `/boards/items/${v2ItemAId}/subitems`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Rough cut', columnValues: { [subColId]: 's1' } },
+    });
+    const subOneId = (subOne.json as { id: string }).id;
+    check('subtask created under parent item',
+      subOne.status === 201 && (subOne.json as { parent_item_id: string }).parent_item_id === v2ItemAId);
+    check('subtask inherited the parent engagement',
+      (subOne.json as { engagement_id: string | null }).engagement_id === engA);
+
+    const subTwo = await api(base, `/boards/items/${v2ItemAId}/subitems`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'Colour pass' },
+    });
+    const subTwoId = (subTwo.json as { id: string }).id;
+    const subReorder = await api(base, `/boards/subitems/${subTwoId}/move`, {
+      email: 'am@test.example', method: 'POST', body: { beforeSubitemId: subOneId },
+    });
+    check('subtask reorder before a sibling', subReorder.status === 201);
+    const subOrder = await pool.query<{ id: string }>(
+      'SELECT id FROM subitem WHERE parent_item_id = $1 ORDER BY position', [v2ItemAId],
+    );
+    check('subtasks ordered gap-free under the parent',
+      subOrder.rows.length === 2 && subOrder.rows[0].id === subTwoId && subOrder.rows[1].id === subOneId);
+
+    const listed = await api(base, `/boards/items/${v2ItemAId}/subitems`, { email: 'am@test.example' });
+    check('subtasks listed for the parent', Array.isArray(listed.json) && (listed.json as unknown[]).length === 2);
+
+    const straySubCol = await api(base, `/boards/items/${v2ItemAId}/subitems`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Bad', columnValues: { [hoursColId]: 3 } },
+    });
+    check('parent column used as a subitem value rejected', straySubCol.status === 400);
+
+    // A subitem must not be a way to reach across the engagement boundary.
+    const crossOrgSubCol = randomUUID();
+    await pool.query(
+      `INSERT INTO subitem_column (id, board_id, name, column_type, config, position)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [crossOrgSubCol, boardAId, 'Leak', 'text', '{}', 99],
+    );
+    const guestSubRead = await api(base, `/boards/items/${v2ItemAId}/subitems`, { email: 'guest@acme.example' });
+    check('guest reading subitems of its scoped item is allowed (scope read)', guestSubRead.status === 200);
+    const guestSubWrite = await api(base, `/boards/items/${v2ItemAId}/subitems`, {
+      email: 'guest@acme.example', method: 'POST', body: { name: 'sneak' },
+    });
+    check('guest cannot create subtasks (403)', guestSubWrite.status === 403);
+    const unscopedSubRead = await api(base, `/boards/items/${v2ItemBId}/subitems`, { email: 'guest@acme.example' });
+    check('guest cannot list subtasks of another item (404)', unscopedSubRead.status === 404);
+
+    // Timeline/Gantt resolves bars from the view's own date column.
+    // Asserted before any timeline view exists: the board has kanban/gallery
+    // views at this point, and `timeline` must still refuse to invent a view.
+    const timelineNoView = await api(base, `/boards/${boardAId}/timeline`, { email: 'am@test.example' });
+    check('timeline without any timeline view is 404', timelineNoView.status === 404);
+
+    const dateCol = await api(base, `/boards/${boardAId}/columns`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Delivery date', columnType: 'date' },
+    });
+    const dateColId = (dateCol.json as { id: string }).id;
+    check('date column created', dateCol.status === 201 && Boolean(dateColId));
+
+    const ganttBad = await api(base, `/boards/${boardAId}/views`, {
+      email: 'am@test.example', method: 'POST', body: { name: 'Bad gantt', viewType: 'gantt' },
+    });
+    check('gantt view without date_column_id rejected', ganttBad.status === 400);
+
+    const ganttView = await api(base, `/boards/${boardAId}/views`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Delivery timeline', viewType: 'gantt', config: { date_column_id: dateColId } },
+    });
+    const ganttViewId = (ganttView.json as { id: string }).id;
+    check('gantt view created with date_column_id', ganttView.status === 201 && Boolean(ganttViewId));
+
+    // One scheduled bar, and the rest honestly reported as unscheduled.
+    await api(base, `/boards/items/${v2ItemAId}`, {
+      email: 'am@test.example', method: 'PATCH',
+      body: { columnValues: { [dateColId]: '2026-10-01' } },
+    });
+    const timeline = await api(base, `/boards/${boardAId}/timeline?viewId=${ganttViewId}`, {
+      email: 'am@test.example',
+    });
+    const tlBody = timeline.json as {
+      dateColumn: { id: string };
+      bars: Array<{ itemId: string; start: string; end: string; groupId: string }>;
+      unscheduled: Array<{ id: string }>;
+    };
+    check('timeline resolves the configured date column', timeline.status === 200 && tlBody.dateColumn.id === dateColId);
+    const bar = tlBody.bars.find((b) => b.itemId === v2ItemAId);
+    check('scheduled item rendered as a bar', Boolean(bar) && new Date(bar!.start).getUTCFullYear() === 2026);
+    check('dated item is a one-day bar', bar?.start === bar?.end);
+    check('undated items reported as unscheduled, not dropped', tlBody.unscheduled.length >= 1);
+
+    // A malformed date is not silently invented into a bar.
+    const malformedItem = await api(base, `/boards/${boardAId}/items`, {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'No real date', columnValues: { [dateColId]: 'not-a-date' } },
+    });
+    const malformedId = (malformedItem.json as { id: string }).id;
+    const tl2 = await api(base, `/boards/${boardAId}/timeline?viewId=${ganttViewId}`, { email: 'am@test.example' });
+    const tl2Body = tl2.json as { bars: Array<{ itemId: string }>; unscheduled: Array<{ id: string; reason: string }> };
+    check('unparseable date yields no bar', !tl2Body.bars.some((b) => b.itemId === malformedId));
+    check('unparseable date is reported with a reason',
+      tl2Body.unscheduled.some((u) => u.id === malformedId && u.reason === 'date not parseable'));
+
+    const timelineGuest = await api(base, `/boards/${boardAId}/timeline?viewId=${ganttViewId}`, {
+      email: 'guest@acme.example',
+    });
+    check('guest cannot read the timeline (403)', timelineGuest.status === 403);
   } finally {
     await app.close();
     await pool.end();

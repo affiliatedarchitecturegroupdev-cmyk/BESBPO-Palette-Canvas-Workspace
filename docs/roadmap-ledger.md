@@ -83,7 +83,7 @@ who (or which agent) did it, and what remains. For scope definitions see
 | A-11 | Onboarding wizard, template marketplace, demo, help | todo | — | — | depends A-04 |
 | A-12 | Public API versioning, importers, exporters | todo | — | — | depends P7-04 (keys), P8-11 |
 | A-13 | Webhook hardening, rate limits, retention enforcement, health/status | todo | — | — | depends §0.5, P6-11 |
-| A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | in-review | PR #26 `n2-board-ui-dnd-search` (moves + search); #25 carries N1 | DnD moves + global search done under N2.2 (374 passed / 0 failed; browser pass). Timeline/Gantt renderer, subtasks, and swimlanes remain (N2.2a) | Partial by design. The §9 data model is complete — `subitem`/`parent_item_id`, `ViewType.Gantt`, and `assertViewConfig` for `date_column_id` all exist; what is missing is service + renderer code, not schema. Row stays open until those land |
+| A-14 | Collaboration parity blocks (timeline/DnD/subtasks/global search) | in-review | PR #26 `93a21f7` (moves + search); PR #27 (timeline/subtasks/swimlanes) | DnD moves + global search under N2.2 (374 passed / 0 failed). Subtasks, timeline/Gantt, and swimlanes under N2.2a (401 passed / 0 failed; browser pass incl. subtask persistence + timeline render; read-only role refused) | All four blocks now shipped end-to-end, pending human merge of PR #27. The §9 data model was already complete (`subitem`/`parent_item_id`, `ViewType.Gantt`, `assertViewConfig` `date_column_id`); N2.2a added the service + renderer code against it with no migration |
 | A-15 | Mobile/PWA, whitelabel, widgets, L10N | todo | — | — | depends A-07, §9 |
 | A-16 | Deliverability, vaulting, SOC2-ish, observability, DR drills | todo | — | — | continuous |
 | UI-01 | Web UI/UX advancement — scalable + mobile-first | done | PR #21 `c76d68c` | CI "Build + tests + gates" green on PR #21; root build exit 0; e2e 239/239; drift 0; LoC 18,039; browser QA on work-1 (dashboard, calendar, settings, help, reports, workload, capacity, commercial, projects, audit all render with seeded data); DataTable server-safe fix (no event handlers across AppShell client boundary) | new `/` dashboard (KPIs + intake attention + project pulse + dispatch), `/calendar` delivery timeline, `/settings` hub, `/help`; shared PageHeader/Badge/DataTable/StatCard/Card/ProgressBar/EmptyState; mobile-first CSS (stacked card rows, compact header, bottom quick-nav); `agentRules:false` |
@@ -131,13 +131,108 @@ rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
 | N1.3 | A-03 password reset/change + session revocation, audited | done | PR #25 `b25e715` | e2e: reset round-trip, weak password 400, reuse 410, expired 410, unknown 401, pre-reset session revoked, no active sessions left behind, change-password wrong-current 401, changer's own session survives, revoke-others keeps caller, all audited; 354 passed / 0 failed | `consumed_at`/`email_outbox` single-use tokens; `person.password_changed_at` added; `revokeSessions(exceptToken?)` spared the caller's own session on change and revoked all on reset |
 | N1.4 | A-04 members/invites/roles admin surface | done | PR #25 `b25e715` | e2e: binding created on accept, invite reuse 409, pending-invite revoke → token 409, member revoke drops bindings, revoked member 403 on `/projects`, self-revoke 403, client 403 on member list, revocation audited; 365 passed / 0 failed. Browser: admin sees members + invites; non-admin sees a restricted notice | `GET /directory/members`, `DELETE /directory/members/:personId/roles`; `/settings/members` + `MemberActions.tsx`. Invite tokens are surfaced in the UI because there is still no mail transport (ADR-0002 D1) — an admin has to hand the token over manually |
 | N2.1 | Public-surface check moved into `npm test`; `body_of` clobbering documented | done | PR #25 `b25e715` | `npm test` now runs `test:public-surface` → `scripts/public-surface-gate.sh`, which boots the built app on an ephemeral port and rebuilds when sources are newer than `BUILD_ID`; negative-tested by removing `POPIA` from the privacy page → gate failed exit 1; green when restored; CI step for the standalone check removed as redundant | The check was a separate CI step nobody ran locally, which is how fabricated legal content reached `main`. Gate lives with the tests now, so a local `npm test` catches the same drift CI does |
-| N2.2 | A-14 board moves + global search (API + web) | in-review | PR #26 `n2-board-ui-dnd-search` (stacked on PR #25) | e2e: move between groups lands in the destination; reorder before a sibling leaves a gap-free ordered list; `beforeItemId` outside the destination group 400; guest move 403; move audited; search finds by name, empty on no match, guest search returns nothing; 374 passed / 0 failed. Browser: `/boards` lists, `/boards/:id` renders groups + status labels, ⌘K search returns "Acme launch film" | `POST /boards/items/:itemId/move` (park-then-reorder) and `GET /boards/search`, hoisted above `@Get(':id')` so `search` is not read as a board id. `apps/web/app/boards/*` + `KanbanView.tsx` (optimistic reorder mirroring the server rule, rollback on rejection) + `GlobalSearch.tsx`. Timeline/Gantt and subtasks split to N2.2a. Correction: `subitem` + `parent_item_id` **do** exist in migration 010 — the gap is that no service or UI code reads them, not a missing migration |
+| N2.2 | A-14 board moves + global search (API + web) | done | PR #26 `93a21f7` | e2e: move between groups lands in the destination; reorder before a sibling leaves a gap-free ordered list; `beforeItemId` outside the destination group 400; guest move 403; move audited; search finds by name, empty on no match, guest search returns nothing; 374 passed / 0 failed. Browser: `/boards` lists, `/boards/:id` renders groups + status labels, ⌘K search returns "Acme launch film" | `POST /boards/items/:itemId/move` (park-then-reorder) and `GET /boards/search`, hoisted above `@Get(':id')` so `search` is not read as a board id. `apps/web/app/boards/*` + `KanbanView.tsx` (optimistic reorder mirroring the server rule, rollback on rejection) + `GlobalSearch.tsx`. Timeline/Gantt and subtasks split to N2.2a. Correction: `subitem` + `parent_item_id` **do** exist in migration 010 — the gap is that no service or UI code reads them, not a missing migration |
+| N2.2a | A-14 follow-up: subtasks, timeline/Gantt renderer, swimlanes | in-review | PR #27 | e2e: subitem round-trip with parent/engagement inheritance; subitem column validation (labels required, unknown type 400); subitem write scoped to parent (cross-board column rejected); guest subitem read/write 403; timeline 404 with no gantt/calendar view; bad `date_column_id` 400; date cell → one-day bar; `{from,to}` → spanned bar; unscheduled items reported with reason, not dropped; unparseable date yields no bar; guest timeline 403; `board.subitem_column_added` / `group.created` / `group.updated` audited; **401 passed / 0 failed**. Browser: kanban nests subtasks under parents; adding a subtask persists through reload; timeline tab renders swimlanes + date range + unscheduled list; read-only role sees no add form and a capability notice | Service + controller + web only, no migration (`subitem`/`subitem_column`/`board_group`/`board_view` already in 010). `readDateSpan` accepts both `date` (ISO string) and `timeline` (`{from,to}`) shapes and returns null for anything else, so the caller reports rather than guesses. Timeline resolves its date source from the view's `config.date_column_id` — it never picks a column itself |
+
+## Recently completed detail
+
+### N2.2a — A-14 subtasks, timeline/Gantt, swimlanes (2026-09-16)
+
+- Branch: `n2.2a-timeline-subtasks-swimlanes` (PR #27), branched from `main` at `93a21f7`
+  (PR #26). No migration: `subitem`, `subitem_column`, `board_group`, and
+  `board_view` all shipped in `010_v2_core_model.sql`; the gap N2.2 disclosed was
+  service + renderer code, and that is all this slice adds.
+- API (`boards.service.ts` / `boards.controller.ts`):
+  - Subitems are read through `getItem(parentItemId)`, so the parent's
+    engagement boundary applies to its children. A subitem is not a side door
+    around `canSeeEngagement`.
+  - `createSubitem` inherits `engagement_id` from the parent rather than
+    accepting it from the caller — otherwise a subitem could be stamped into an
+    engagement the writer cannot see.
+  - `validateSubitemValues` rejects any column id not on the board's
+    `subitem_column` set, so a parent's board column cannot be used as a subitem
+    column. Subitem columns are their own smaller set per §9.3, not a copy.
+  - `moveSubitem` reuses the park-then-reorder shape from `moveItem` and
+    requires `beforeSubitemId` to share the parent — a sibling in another list
+    would order against the wrong sequence.
+  - Guests (`ctx.itemScope`) are refused subitem writes explicitly; reads go
+    through the parent's `getItem`, which already gates them.
+  - `timeline` prefers an explicit `?viewId`, else falls back to the first
+    `gantt` then `calendar` view; no such view is 404, a non-timeline view 400,
+    and a `date_column_id` outside the board 400.
+- `readDateSpan` — the one genuinely non-obvious piece. Both shapes the spec
+  allows are accepted: a `date` cell is a single ISO string (one-day bar), a
+  `timeline` cell is `{from,to}`. Anything else — a number, free text, a
+  malformed object — returns null so the item lands in `unscheduled` with a
+  reason. Reversed ranges collapse to the start rather than drawing a negative
+  bar. Silently dropping undated work would make the timeline look emptier than
+  the board is.
+- Audit: `subitem.created/updated/moved/deleted`, plus `group.created`,
+  `group.updated`, and `board.subitem_column_added`. The last two were added
+  during review — `addColumn` and `board.created` already audit, so creating a
+  group or a subitem column without one would have been an inconsistency, not a
+  judgement call.
+- Web: `SubtaskList.tsx` (subtasks under each card, `onDragStart` prevented so
+  the card's drag does not hijack the input), `TimelineView.tsx` (swimlanes as
+  horizontal bands on one shared time axis, so a date sits at the same x in
+  every lane; one-day bars get a 1.5% floor width; unscheduled list below),
+  `BoardViews.tsx` (Kanban/Timeline switcher). The Timeline tab only renders
+  when the server produced a payload — offering a tab that 400s on click is
+  worse than not offering it.
+- Board page fetches `subitems()` per item and `timeline()` once, tolerating
+  404 as "no timeline configured" rather than an error.
+- Gates: `npm run build` exit 0; **e2e 401 passed / 0 failed**; public-surface
+  gate OK; drift 0 findings across 106 rows; `scripts/loc.sh` 25,052 LoC of
+  code (apps + packages + scripts; 27,104 including `docs/`). The doc figure is
+  not stable — `loc.sh` walks `docs/`, so every ledger edit moves it without any
+  code changing, which is why the code-only number is quoted first here.
+- Browser QA, re-run against a freshly seeded dev DB (the earlier pass was
+  recorded against identities and fixtures that do not exist: the dev seed is
+  all `@besbpo.example`, and the run order was `npm test` *then* browse, so the
+  e2e suite's truncate had already wiped anything a browser had created).
+  Verified this time with cookie `pc_user_email` on the tunnel host:
+  - `am@besbpo.example` (account_manager) → `/boards` lists the board; kanban
+    renders `subtasks (1)` nested under its parent; typing "UI-added subtask"
+    and pressing **add** persisted it — visible through reload *and* present in
+    `subitem` joined to the correct `parent_item_id`, attributed to `am`.
+  - Timeline tab rendered `Gantt view · positioned by **Due** · 2026-03-20 →
+    2026-03-21`, the swimlane `Lane one` with its one scheduled bar, and
+    `Not scheduled (2)` listing "Undated item · no date set" and
+    "Bad date item · date not parseable" — i.e. undated work is reported, not
+    silently dropped.
+  - `qa@besbpo.example` (quality_reviewer, `items.read` but not `items.write`)
+    on the same board: no add form, and the notice "You can read this board.
+    Moving items requires the items.write capability." Nav also collapsed to
+    the capability-gated subset. `POST .../subitems` as `qa` → **403
+    `missing items.write`**.
+- **Security finding — external roles can read internal boards (pre-existing,
+  not introduced by this slice).** Verified on the dev DB: a board with
+  `engagement_id IS NULL` in an `internal` workspace is readable by
+  `client-a@nimbus.example` (`client_approver`) — `GET /boards/:id`,
+  `/boards/:id/timeline`, and `/items/:id/subitems` all return **200**, and the
+  client sees the board's item names and columns. `boards.service.ts` consults
+  neither `workspace_type` nor `canSeeVisibility`; `requireBoard` only checks
+  org, `itemScope`, and `canSeeEngagement`, and `canSeeEngagement` returns
+  `!ctx.itemScope` for `engagement_id === null`, which is **true** for a
+  client_approver (`itemScope: null`, bounded by a `scopes[].workspaceId`,
+  not by `itemScope`). The same shape was confirmed on `main` @ `93a21f7`, so
+  it is not a regression from this branch — but `/timeline` and `/subitems` are
+  new surfaces that inherit it, which is why it is recorded here rather than
+  left to the audit. An engagement-scoped board *is* correctly refused (404).
+  The fix is a visibility check in `requireBoard`/`listBoards` and an e2e case
+  asserting a client cannot read an engagement-less internal board; it is not
+  attempted in this slice because it changes existing board access for every
+  role and belongs in a reviewed N2.4 with its own test.
+- Earlier recorded claims that browser QA used `ops@besbpo.example` and created
+  "Browser QA subtask" on "Final lockups", and that a cross-org
+  `client-a@nimbus.example` read "returned the board-unavailable state", were
+  wrong on all three counts and have been replaced by the above.
 
 ## Recently completed detail
 
 ### N2.2 — A-14 board DnD moves + cross-board search (2026-09-15)
 
-- Branch: `n2-board-ui-dnd-search`, PR #26, stacked on PR #25 `n1-email-transport-auth-chain` (both pending human review)
+- Branch: `n2-board-ui-dnd-search`, merged to `main` as `93a21f7`. PR #26 was retargeted from the N1 branch to `main` once PR #25 landed as `b25e715`; the post-retarget diff was N2.2-only (14 files).
 - API work that had to land before any UI:
   - `POST /boards/items/:itemId/move` — public surface for kanban DnD. The
     reorder is two statements, not one: the item is parked at position `-1`,
@@ -181,7 +276,9 @@ rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
   `parent_item_id` in migration 010, `ViewType.Gantt`, and
   `assertViewConfig`'s `date_column_id` requirement — so the remaining work is
   service + renderer code, not a migration. Claiming all four in one PR would
-  have overstated coverage.
+  have overstated coverage. **Landed in N2.2a (see that entry):** subitems,
+  timeline/Gantt, and swimlanes all shipped against this same schema with no new
+  migration.
 
 ### V2 Phases 1–6 — boards, comms, dashboards, agents, public surface (2026-09-15)
 
@@ -416,6 +513,17 @@ still genuinely open:
    residency claim in §15.2 the privacy page is now tied to this decision (the
    page says Render and flags the UK question as open rather than asserting a
    location).
+7. **Visibility boundary on boards and meetings** — `boards.service.ts`
+   enforces org, guest (`itemScope`), and engagement scope, but never
+   `workspace_type` or `canSeeVisibility`. Net effect: an external role
+   (`client_approver`, `third_party_vendor`) can read an `engagement_id IS NULL`
+   board in an `internal` workspace, including its items, columns, timeline, and
+   subtasks. The same shape exists in `comms.service.ts`: `listMeetings` filters
+   only by org and engagement, so a client is returned an engagement-less
+   internal meeting and `joinMeeting` will let it join. Reproduced on the dev DB;
+   the board case is identical on `main` @ `93a21f7`, so it predates the N2.2a
+   surfaces that inherit it. Fix scoped to N2.4 with its own e2e case — it
+   changes access for every role and should not ride a feature PR.
 
 ~~Dashboards~~ — delivered by V2 Phase 4 (PR #22), per the V2 rows above.
 ~~Legal/resource pages~~ — delivered V2 Phase 6 (PR #22), corrected by SPA-03/05.
@@ -451,6 +559,29 @@ abstraction either way and records the decision in `docs/decisions/`.
 | N2.2 | A-14 board UI: DnD board moves, global search over the V2 §9 model. Timeline/Gantt + subtasks are **not** in this slice | SPA-01 tokens | e2e: moves persist, reorder is gap-free, guest 403; browser: K search returns cross-board hits |
 | N2.2a | A-14 follow-up: timeline/Gantt renderer, subtasks, swimlanes | N2.2 | e2e: subtask parent/child round-trip; Gantt view renders off `date_column_id` |
 | N2.3 | Surface the V2 comms layer (§11) in the web app — channels, threads, mentions, meetings | N2.2 | browser pass; internal channel hidden from client |
+| N2.4 | Visibility boundary for boards **and meetings**: enforce `workspace_type`/`canSeeVisibility` in `requireBoard` + `listBoards` so external roles cannot read `internal`, engagement-less boards; make `listMeetings`/`joinMeeting` refuse a client an engagement-less or internal meeting; add `Capability.MeetingsRead` and gate `GET /meetings` on it | N2.2a | e2e: client_approver and third_party_vendor get 403/404 on an internal board and on its items/timeline/subitems, and are not returned an engagement-less meeting; internal roles unaffected |
+
+Status: N2.1 and N2.2 are **done**; N2.2a is **in review** as PR #27 (see the
+rows above). Once PR #27 merges, **N2.4 is the next slice** — a pre-existing
+board visibility gap found during the N2.2a browser pass, widened to cover
+meetings, and a prerequisite for trusting the "hidden from client" claims that
+N2.3 and later surfaces will make.
+**N2.3 follows N2.4.** Its API exists, so the slice is mostly web routes; but it
+is *not* purely UI — the scoping notes below identify membership and
+meeting-capability decisions that are service work, and the visibility filter
+must stay server-side. Settle those before or with the UI, not after.
+
+**N2.4 comes before N2.3 in priority despite the number.** N2.3 adds the first
+external-facing comms surface. The channels layer *does* enforce the §11.2
+boundary correctly (`requireChannel` refuses a client any non-`external`
+channel, and `listChannels` pins a client to `external` in SQL), but the two
+surfaces N2.3 will sit next to do not: boards leak engagement-less internal
+boards to clients (gap 7), and `listMeetings`/`joinMeeting` leak
+engagement-less internal meetings to clients the same way. Building an
+external-facing comms UI on top of unfixed boundaries widens the blast radius of
+an existing issue, and it is not safe to keep making "hidden from client"
+claims — the exact claim N2.3's test shape asserts — while a known boundary gap
+is open. N2.4 is small, well-bounded, and has a clear test, so close it first.
 
 ### Then — N3: honesty and operational maturity
 
@@ -496,13 +627,117 @@ product surface and the directory side of it:
   `packages/shared`, and `assertViewConfig` already requires `date_column_id`
   for both `gantt` and `calendar`. The real gap is that no service method or web
   renderer reads any of it — that is code work, not a migration. N2.2 shipped
-  moves + search only; the rest is N2.2a.
+  moves + search only; **N2.2a closed that gap** — subitems, the timeline/Gantt
+  renderer, and swimlanes all landed there against the existing schema, so no
+  part of the §9 collaboration surface remains unimplemented.
 
 **N2.3 — V2 comms surface.** The API exists (`comms.controller.ts`, channels +
 `channel_members`, internal-visibility boundary already e2e-tested as
 "internal channel never visible to client"). This slice is mostly web routes;
 the risk is re-implementing the visibility filter client-side instead of relying
-on the server, which would be a security bug, not a UI bug.
+on the server, which would be a security bug, not a UI bug. Concretely:
+
+- Routes present: `POST/GET /channels`, `POST/GET /channels/:id/messages`
+  (the GET takes `parentMessageId` for thread replies), and
+  `POST /channels/:id/convert-external`, plus
+  `POST/GET /meetings` and `POST /meetings/:id/join`.
+- Capabilities already defined: `channels.read`, `channels.write`,
+  `meetings.write` (shared `Capability` enum). Nav has no comms entry yet, so
+  the work is a new route plus a `Connect`-section nav item gated on
+  `channels.read`.
+- Threads and mentions are server-side already: `postMessage` takes
+  `parentMessageId` and `mentions`, rejects a reply whose parent is in another
+  channel, and fans each mention out to a `notifications` row. The UI should
+  surface `mentions` as-is rather than resolving them itself.
+- The one thing the UI must **not** do is filter internal vs external on the
+  client. `requireChannel` refuses a client (`isClient`) any channel that is not
+  `external`, and `listChannels` filters by visibility in SQL. The web layer
+  should render whatever the API returns and let a 403 stand.
+- `convertToExternal` is the only path that ever changes a channel's visibility
+  and it is audited ("explicit, audited internal→external conversion") — do not
+  add a second, quieter path just to make a UI control convenient.
+
+Gaps the code does **not** close, found by reading it rather than the plan.
+Each is small, but a UI built without deciding them will either ship a lie or a
+bug:
+
+- **`channel_member` is written and never read.** `join()` inserts rows on
+  create and `createChannel` accepts `memberIds`, but no query anywhere reads
+  the table — `listChannels` selects every non-archived channel in the org
+  (further filtered only by engagement and visibility), and `requireChannel`
+  checks org + visibility + engagement, never membership. So a channel is
+  effectively org-wide today, and the N2.3 UI must not draw a member list or a
+  "private to members" affordance that the server does not enforce. Either
+  wire membership into `listChannels`/`requireChannel` (its own slice with
+  tests, since it changes existing access) or render the channel as org-wide
+  and say so. Silently implying privacy that does not exist is the worst of the
+  three options.
+- **There is no `meetings.read` capability, and `GET /meetings` is not a read
+  endpoint.** `Capability.MeetingsWrite` is the only meeting capability in the
+  enum — `meetings.read` does not exist — and `GET /meetings` requires
+  *`MeetingsWrite`*. The guest path is fine (`listMeetings` special-cases
+  `ctx.itemScope` to meetings the person actually participates in, so a guest
+  sees only its own), so this is **not** the guest leak it first looks like.
+  What is real:
+  - The capability is misnamed for the operation. A read is gated on a write
+    cap, which means any future read-only role cannot be granted meeting
+    visibility without also granting it the ability to schedule and join.
+  - **`listMeetings` does not consult visibility or client status at all.**
+    Unlike `listChannels`, which pins a client to `visibility = 'external'`,
+    the meeting query filters only by org and (optionally) engagement, so an
+    external `client_approver` is returned an `engagement_id IS NULL` meeting —
+    e.g. an internal staffing sync — verbatim. Reproduced on the dev DB:
+    `am` created "Internal staffing sync" (no engagement) and
+    `client-a@nimbus.example`, same org, listed it.
+    This is the same class of gap as open gap 7 on boards and should be fixed
+    in the same slice (N2.4) rather than inside a UI PR.
+  - `joinMeeting` looks up the meeting by org only, so the same client can join
+    it too. Attendance is recorded honestly (§11.4) but the boundary is absent.
+  Decide the capability shape here (add `MeetingsRead`, gate reads on it) and
+  fix the visibility filter in N2.4 before the UI leans on `GET /meetings`.
+- **Every channel in the dev DB is `external`,** including one named "Internal
+  production". That is a fixture artefact — the e2e suite creates it with
+  `visibility: 'internal'` and then the "conversion is audited" test converts
+  it to external and the seed does not reset it — but it means a browser pass
+  against a *tested* DB can never show the internal-channel-hidden-from-client
+  path, which is the single most important behaviour in §11.2. Re-seed before
+  the N2.3 browser evidence, and assert internal visibility on a
+  `visibility='internal'` fixture, not on whatever the DB happens to hold.
+- Nav is `NAV_SECTIONS` in `apps/web/app/components/nav.ts`; the comms entry
+  belongs in the `connect` section gated on `channels.read` (which
+  `ClientApprover`, `ThirdPartyVendor`, `QualityReviewer` and
+  `AgencyContributor` all hold, so the empty-state and read-only paths need
+  designs, not just the writer path). The web API client is
+  `apps/web/lib/api.ts` (`api<T>(path, email, init)` returns `{ error }` rather
+  than throwing, so every new call must branch on that shape).
+
+**N3.1 — storage backend.** The file service exists (`files.service.ts`) with an
+S3-shaped seam; what is missing is the real backend behind it and raster
+thumbnails. Blocked on the human storage decision already flagged in N1; do not
+pick a provider to unblock it.
+
+**N3.2 — A-13 webhook hardening.** Outbound webhooks are **already** HMAC-signed
+(`integrations.service.ts` sets `x-palette-signature` with sha256 over the
+body) and delivered through the P6-11 job queue with retries. So the remaining
+work is narrower than the row's wording suggests: inbound signature
+*verification* where applicable, plus rate limits (only the auth resend throttle
+exists today — `RESEND_THROTTLE_MS`) and retention *enforcement* (the
+`/legal/retention` + `/legal/purge` endpoints exist and are audited, but nothing
+schedules them — there is no `@Cron` anywhere, and `jobs.service.ts` runs a
+polling `setInterval`, so a purge job would be enqueued onto that queue rather
+than adding a scheduler dependency).
+
+**N3.3 — public API versioning + importer apply.** API keys exist
+(`identity/api-keys.controller.ts`) but routes are unversioned. The import
+dry-run tooling is `scripts/import-dry-run.sh`; "apply" needs the write path
+behind the same validation the dry run already enforces, so the dry run's checks
+should move into shared code rather than being duplicated.
+
+**N3.4 — observability + DR drills.** The backup/restore and load drills exist
+as scripts (`scripts/backup.sh`, `restore-drill.sh`, `load-test.js`) but their
+last recorded runs were at 55 e2e checks; they must be re-run against the current
+schema before their evidence is quoted again. Health endpoints are per-module
+(`/email/status`, `/integrations/health`) rather than one aggregate probe.
 
 ### Explicitly deferred, and why
 
@@ -520,8 +755,8 @@ on the server, which would be a security bug, not a UI bug.
 
 | Gate | Target | Actual | Status |
 | --- | --- | --- | --- |
-| LoC | ≥ 80k (Phase 6 exit) | ~37.6k (ts/tsx/sql/sh/js, excl. build dirs) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate |
-| e2e | ≥ 320 checks | 374 (N2.2) | met |
+| LoC | ≥ 80k (Phase 6 exit) | 25,052 code (27,104 with `docs/`, `scripts/loc.sh`, 228 files) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate. (An earlier row cited ~37.6k from a looser ts/tsx/sql/sh/js count; `loc.sh` is the gate's own measure and is used here. `loc.sh` counts `docs/`, so the headline figure drifts with ledger edits; the code-only subtotal is the meaningful one) |
+| e2e | ≥ 320 checks | 401 (N2.2a) | met |
 | Permission tests | pass | pass | met |
 | Drift | 0 findings | 0 | met |
 

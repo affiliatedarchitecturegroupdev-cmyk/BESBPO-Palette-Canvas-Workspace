@@ -168,6 +168,120 @@ export class BoardsController {
     return this.boards.moveItem(ctx, itemId, body);
   }
 
+  /* ---------------- subitems (§9.3) ---------------- */
+
+  @Get(':id/subitem-columns')
+  async listSubitemColumns(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('id') boardId: string,
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.BoardsRead);
+    return this.boards.listSubitemColumns(ctx, boardId);
+  }
+
+  @Post(':id/subitem-columns')
+  async addSubitemColumn(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('id') boardId: string,
+    @Body() body: { name: string; columnType: string; config?: Record<string, unknown> },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.BoardsWrite);
+    return this.boards.addSubitemColumn(ctx, boardId, body);
+  }
+
+  @Get('items/:itemId/subitems')
+  async listSubitems(@Headers('x-user-email') email: string | undefined, @Param('itemId') itemId: string) {
+    const ctx = await this.identity.resolve(email);
+    this.assertItemRead(ctx);
+    return this.boards.listSubitems(ctx, itemId);
+  }
+
+  @Post('items/:itemId/subitems')
+  async createSubitem(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('itemId') itemId: string,
+    @Body() body: { name: string; columnValues?: Record<string, unknown> },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.ItemsWrite);
+    return this.boards.createSubitem(ctx, itemId, body);
+  }
+
+  @Patch('subitems/:subitemId')
+  async updateSubitem(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('subitemId') subitemId: string,
+    @Body() body: { name?: string; columnValues?: Record<string, unknown> },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.ItemsWrite);
+    return this.boards.updateSubitem(ctx, subitemId, body);
+  }
+
+  @Post('subitems/:subitemId/move')
+  async moveSubitem(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('subitemId') subitemId: string,
+    @Body() body: { beforeSubitemId?: string },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.ItemsWrite);
+    return this.boards.moveSubitem(ctx, subitemId, body);
+  }
+
+  @Post('subitems/:subitemId/delete')
+  async deleteSubitem(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('subitemId') subitemId: string,
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.ItemsWrite);
+    return this.boards.deleteSubitem(ctx, subitemId);
+  }
+
+  /* ---------------- timeline / gantt (§9.5) ---------------- */
+
+  /**
+   * Bars for a date-driven view. Two segments after `boards`, so the
+   * single-segment `@Get(':id')` cannot capture it.
+   */
+  @Get(':id/timeline')
+  async timeline(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('id') boardId: string,
+    @Query('viewId') viewId?: string,
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.BoardsRead);
+    return this.boards.timeline(ctx, boardId, viewId);
+  }
+
+  /* ---------------- groups (swimlanes) ---------------- */
+
+  @Post(':id/groups')
+  async createGroup(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('id') boardId: string,
+    @Body() body: { name: string; color?: string },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.BoardsWrite);
+    return this.boards.createGroup(ctx, boardId, body);
+  }
+
+  @Patch('groups/:groupId')
+  async updateGroup(
+    @Headers('x-user-email') email: string | undefined,
+    @Param('groupId') groupId: string,
+    @Body() body: { name?: string; color?: string | null; isCollapsed?: boolean },
+  ) {
+    const ctx = await this.identity.resolve(email);
+    this.authz.require(ctx, Capability.BoardsWrite);
+    return this.boards.updateGroup(ctx, groupId, body);
+  }
+
   /* ---------------- views ---------------- */
 
   @Post(':id/views')

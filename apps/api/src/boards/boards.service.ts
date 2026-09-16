@@ -47,6 +47,82 @@ export interface ItemRow {
   position: number;
 }
 
+export interface SubitemColumnRow {
+  id: string;
+  board_id: string;
+  name: string;
+  column_type: string;
+  config: Record<string, unknown>;
+  position: number;
+}
+
+export interface SubitemRow {
+  id: string;
+  org_id: string;
+  parent_item_id: string;
+  engagement_id: string | null;
+  name: string;
+  column_values: Record<string, unknown>;
+  position: number;
+}
+
+export interface GroupRow {
+  id: string;
+  board_id: string;
+  name: string;
+  color: string | null;
+  position: number;
+  is_collapsed: boolean;
+}
+
+export interface ViewRow {
+  id: string;
+  board_id: string;
+  name: string;
+  view_type: string;
+  config: Record<string, unknown>;
+  is_default: boolean;
+  position: number;
+}
+
+export interface TimelineBar {
+  itemId: string;
+  name: string;
+  groupId: string;
+  start: string;
+  end: string;
+}
+
+/**
+ * Read a date or timeline cell into a `[start, end]` span.
+ *
+ * Both column shapes the spec allows are accepted: a `date` cell is a single
+ * ISO string (a one-day bar), and a `timeline` cell is `{ from, to }`. Anything
+ * else — a number, a free-text date, a malformed object — resolves to null so
+ * the caller can report the item as unscheduled instead of guessing a date.
+ */
+function readDateSpan(raw: unknown): { start: string; end: string } | null {
+  const iso = (v: unknown): string | null => {
+    if (typeof v !== 'string' || !v.trim()) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  };
+  if (typeof raw === 'string') {
+    const start = iso(raw);
+    return start ? { start, end: start } : null;
+  }
+  if (raw && typeof raw === 'object') {
+    const obj = raw as { from?: unknown; to?: unknown };
+    const start = iso(obj.from);
+    if (!start) return null;
+    const end = iso(obj.to) ?? start;
+    // A reversed range would render as a zero-width or negative bar; treat the
+    // span as ordered rather than drawing something the data does not say.
+    return new Date(end) < new Date(start) ? { start, end: start } : { start, end };
+  }
+  return null;
+}
+
 /** Column types whose config must carry `labels`. */
 const LABEL_TYPES: readonly ColumnType[] = [ColumnType.Status, ColumnType.Dropdown];
 
@@ -442,6 +518,307 @@ export class BoardsService {
       [ctx.orgId, like],
     );
     return rows.filter((r) => this.canSeeEngagement(ctx, r.engagement_id));
+  }
+
+  /* ---------------- subitems (§9.3) ---------------- */
+
+  /**
+   * A board's subitem columns. Separate table from `board_column` by spec §9.3:
+   * subitems carry their own smaller column set, not a copy of the parent's.
+   */
+  async listSubitemColumns(ctx: UserContext, boardId: string) {
+    await this.requireBoard(ctx, boardId);
+    const { rows } = await this.db.query<SubitemColumnRow>(
+      'SELECT * FROM subitem_column WHERE board_id = $1 ORDER BY position',
+      [boardId],
+    );
+    return rows;
+  }
+
+  async addSubitemColumn(
+    ctx: UserContext,
+    boardId: string,
+    input: { name: string; columnType: string; config?: Record<string, unknown> },
+  ) {
+    await this.requireBoard(ctx, boardId);
+    this.assertColumnType(input.columnType);
+    this.assertColumnConfig(input.columnType, input.config ?? {});
+    const pos = await this.db.one<{ next: number }>(
+      'SELECT COALESCE(MAX(position), 0) + 1 AS next FROM subitem_column WHERE board_id = $1',
+      [boardId],
+    );
+    const created = await this.db.one<SubitemColumnRow>(
+      `INSERT INTO subitem_column (id, board_id, name, column_type, config, position)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [randomUUID(), boardId, input.name, input.columnType, JSON.stringify(input.config ?? {}), pos.next],
+    );
+    await this.audit.log(ctx.orgId, ctx.userId, 'board.subitem_column_added', 'board', boardId, {
+      columnType: input.columnType,
+    });
+    return created;
+  }
+
+  /**
+   * Subitems of one parent. Resolved through `getItem` so the parent's
+   * engagement boundary applies to the children too — otherwise a subitem would
+   * be a way to read across engagements.
+   */
+  async listSubitems(ctx: UserContext, parentItemId: string): Promise<SubitemRow[]> {
+    const parent = await this.getItem(ctx, parentItemId);
+    const { rows } = await this.db.query<SubitemRow>(
+      'SELECT * FROM subitem WHERE parent_item_id = $1 ORDER BY position, created_at',
+      [parent.id],
+    );
+    return rows;
+  }
+
+  async createSubitem(
+    ctx: UserContext,
+    parentItemId: string,
+    input: { name: string; columnValues?: Record<string, unknown> },
+  ): Promise<SubitemRow> {
+    const parent = await this.getItem(ctx, parentItemId);
+    if (ctx.itemScope) throw new ForbiddenException('guest may not write subitems');
+    await this.validateSubitemValues(parent.board_id, input.columnValues ?? {});
+    const pos = await this.db.one<{ next: number }>(
+      'SELECT COALESCE(MAX(position), 0) + 1 AS next FROM subitem WHERE parent_item_id = $1',
+      [parent.id],
+    );
+    const created = await this.db.one<SubitemRow>(
+      `INSERT INTO subitem (id, org_id, parent_item_id, engagement_id, name, column_values, position, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [
+        randomUUID(),
+        ctx.orgId,
+        parent.id,
+        parent.engagement_id,
+        input.name,
+        JSON.stringify(input.columnValues ?? {}),
+        pos.next,
+        ctx.userId,
+      ],
+    );
+    await this.audit.log(ctx.orgId, ctx.userId, 'subitem.created', 'item', parent.id, {
+      subitemId: created.id,
+    });
+    return created;
+  }
+
+  async updateSubitem(
+    ctx: UserContext,
+    subitemId: string,
+    patch: { name?: string; columnValues?: Record<string, unknown> },
+  ): Promise<SubitemRow> {
+    const sub = await this.getSubitem(ctx, subitemId);
+    if (ctx.itemScope) throw new ForbiddenException('guest may not write subitems');
+    const parent = await this.getItem(ctx, sub.parent_item_id);
+    await this.validateSubitemValues(parent.board_id, patch.columnValues ?? {});
+    const merged = { ...sub.column_values, ...(patch.columnValues ?? {}) };
+    const updated = await this.db.one<SubitemRow>(
+      `UPDATE subitem SET name = COALESCE($2, name), column_values = $3
+       WHERE id = $1 RETURNING *`,
+      [subitemId, patch.name ?? null, JSON.stringify(merged)],
+    );
+    await this.audit.log(ctx.orgId, ctx.userId, 'subitem.updated', 'item', sub.parent_item_id, {
+      subitemId,
+      fields: Object.keys(patch.columnValues ?? {}),
+    });
+    return updated;
+  }
+
+  /** Reorder within the parent — same park-then-reorder shape as `moveItem`. */
+  async moveSubitem(
+    ctx: UserContext,
+    subitemId: string,
+    input: { beforeSubitemId?: string },
+  ): Promise<SubitemRow> {
+    const sub = await this.getSubitem(ctx, subitemId);
+    if (ctx.itemScope) throw new ForbiddenException('guest may not write subitems');
+    await this.getItem(ctx, sub.parent_item_id);
+
+    let index: number;
+    if (input.beforeSubitemId) {
+      const before = await this.db.oneOrNull<{ position: number; parent_item_id: string }>(
+        'SELECT position, parent_item_id FROM subitem WHERE id = $1',
+        [input.beforeSubitemId],
+      );
+      // A sibling under a different parent would order against the wrong list.
+      if (!before || before.parent_item_id !== sub.parent_item_id) {
+        throw new BadRequestException('beforeSubitemId must share the parent item');
+      }
+      index = before.position;
+    } else {
+      const last = await this.db.one<{ last: number | null }>(
+        'SELECT MAX(position) AS last FROM subitem WHERE parent_item_id = $1',
+        [sub.parent_item_id],
+      );
+      index = last.last === null ? 0 : last.last + 1;
+    }
+
+    await this.db.query('UPDATE subitem SET position = $2 WHERE id = $1', [subitemId, -1]);
+    await this.db.query(
+      `UPDATE subitem SET position = position + 1
+       WHERE parent_item_id = $1 AND position >= $2 AND id <> $3`,
+      [sub.parent_item_id, index, subitemId],
+    );
+    const moved = await this.db.one<SubitemRow>(
+      'UPDATE subitem SET position = $2 WHERE id = $1 RETURNING *',
+      [subitemId, index],
+    );
+    await this.audit.log(ctx.orgId, ctx.userId, 'subitem.moved', 'item', sub.parent_item_id, {
+      subitemId,
+      position: index,
+    });
+    return moved;
+  }
+
+  async deleteSubitem(ctx: UserContext, subitemId: string): Promise<{ deleted: boolean }> {
+    const sub = await this.getSubitem(ctx, subitemId);
+    if (ctx.itemScope) throw new ForbiddenException('guest may not write subitems');
+    await this.getItem(ctx, sub.parent_item_id);
+    await this.db.query('DELETE FROM subitem WHERE id = $1', [subitemId]);
+    await this.audit.log(ctx.orgId, ctx.userId, 'subitem.deleted', 'item', sub.parent_item_id, {
+      subitemId,
+    });
+    return { deleted: true };
+  }
+
+  async getSubitem(ctx: UserContext, subitemId: string): Promise<SubitemRow> {
+    const sub = await this.db.oneOrNull<SubitemRow>('SELECT * FROM subitem WHERE id = $1 AND org_id = $2', [
+      subitemId,
+      ctx.orgId,
+    ]);
+    if (!sub) throw new NotFoundException('subitem not found');
+    return sub;
+  }
+
+  private async validateSubitemValues(boardId: string, values: Record<string, unknown>): Promise<void> {
+    const ids = Object.keys(values);
+    if (!ids.length) return;
+    const { rows } = await this.db.query<SubitemColumnRow>(
+      'SELECT * FROM subitem_column WHERE board_id = $1',
+      [boardId],
+    );
+    const known = new Set(rows.map((r) => r.id));
+    for (const id of ids) {
+      if (!known.has(id)) throw new BadRequestException(`subitem column ${id} does not belong to this board`);
+    }
+  }
+
+  /* ---------------- timeline / gantt (§9.5) ---------------- */
+
+  /**
+   * Bars for a date-driven view. The date source is the view's own
+   * `config.date_column_id`, which `assertViewConfig` already requires — the
+   * renderer does not guess a column.
+   *
+   * Items with no (or unparseable) date are returned in `unscheduled` rather
+   * than dropped: silently omitting work makes a timeline look emptier than the
+   * board is, which is the kind of quiet lie the gates exist to catch.
+   */
+  async timeline(ctx: UserContext, boardId: string, viewId?: string) {
+    await this.requireBoard(ctx, boardId);
+    const { rows: views } = await this.db.query<ViewRow & { view_type: string }>(
+      'SELECT * FROM board_view WHERE board_id = $1 ORDER BY position',
+      [boardId],
+    );
+    const view = viewId
+      ? views.find((v) => v.id === viewId)
+      : views.find((v) => v.view_type === 'gantt') ?? views.find((v) => v.view_type === 'calendar');
+    if (!view) throw new NotFoundException('no timeline view on this board');
+    if (view.view_type !== 'gantt' && view.view_type !== 'calendar') {
+      throw new BadRequestException('view is not a timeline view');
+    }
+    const dateColumnId = (view.config as { date_column_id?: string }).date_column_id;
+    if (!dateColumnId) throw new BadRequestException('timeline view requires config.date_column_id');
+    const dateCol = await this.db.oneOrNull<ColumnRow>(
+      'SELECT * FROM board_column WHERE id = $1 AND board_id = $2',
+      [dateColumnId, boardId],
+    );
+    if (!dateCol) throw new BadRequestException('config.date_column_id does not belong to this board');
+
+    const items = await this.listItems(ctx, boardId);
+    const { rows: groups } = await this.db.query<{ id: string; name: string }>(
+      'SELECT id, name FROM board_group WHERE board_id = $1 ORDER BY position',
+      [boardId],
+    );
+
+    const bars: TimelineBar[] = [];
+    const unscheduled: Array<{ id: string; name: string; reason: string }> = [];
+    for (const it of items) {
+      const span = readDateSpan(it.column_values?.[dateColumnId]);
+      if (!span) {
+        unscheduled.push({
+          id: it.id,
+          name: it.name,
+          reason: it.column_values?.[dateColumnId] === undefined ? 'no date set' : 'date not parseable',
+        });
+        continue;
+      }
+      bars.push({
+        itemId: it.id,
+        name: it.name,
+        groupId: it.group_id,
+        start: span.start,
+        end: span.end,
+      });
+    }
+    return {
+      view: { id: view.id, name: view.name, viewType: view.view_type },
+      dateColumn: { id: dateCol.id, name: dateCol.name, columnType: dateCol.column_type },
+      groups,
+      bars,
+      unscheduled,
+    };
+  }
+
+  /* ---------------- groups (swimlanes) ---------------- */
+
+  async createGroup(
+    ctx: UserContext,
+    boardId: string,
+    input: { name: string; color?: string },
+  ) {
+    await this.requireBoard(ctx, boardId);
+    const pos = await this.db.one<{ next: number }>(
+      'SELECT COALESCE(MAX(position), 0) + 1 AS next FROM board_group WHERE board_id = $1',
+      [boardId],
+    );
+    const created = await this.db.one<GroupRow>(
+      `INSERT INTO board_group (id, board_id, name, color, position)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [randomUUID(), boardId, input.name, input.color ?? null, pos.next],
+    );
+    await this.audit.log(ctx.orgId, ctx.userId, 'group.created', 'board', boardId, { name: input.name });
+    return created;
+  }
+
+  async updateGroup(
+    ctx: UserContext,
+    groupId: string,
+    patch: { name?: string; color?: string | null; isCollapsed?: boolean },
+  ) {
+    const group = await this.db.oneOrNull<GroupRow>('SELECT * FROM board_group WHERE id = $1', [groupId]);
+    if (!group) throw new NotFoundException('group not found');
+    await this.requireBoard(ctx, group.board_id);
+    const updated = await this.db.one<GroupRow>(
+      `UPDATE board_group
+       SET name = COALESCE($2, name),
+           color = CASE WHEN $3::boolean THEN $4 ELSE color END,
+           is_collapsed = COALESCE($5, is_collapsed)
+       WHERE id = $1 RETURNING *`,
+      [
+        groupId,
+        patch.name ?? null,
+        patch.color !== undefined,
+        patch.color ?? null,
+        patch.isCollapsed ?? null,
+      ],
+    );
+    await this.audit.log(ctx.orgId, ctx.userId, 'group.updated', 'board', group.board_id, {
+      groupId,
+    });
+    return updated;
   }
 
   /* ---------------- views ---------------- */

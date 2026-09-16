@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { V2Column, V2Group, V2Item } from '@/lib/api';
+import type { V2Column, V2Group, V2Item, V2Subitem } from '@/lib/api';
+import SubtaskList from './SubtaskList';
 
 /**
  * Kanban view over V2 board data, with HTML5 drag-and-drop.
@@ -17,6 +18,7 @@ export default function KanbanView({
   columns,
   groups,
   items,
+  subtasks,
   canWrite,
 }: {
   apiUrl: string;
@@ -24,6 +26,7 @@ export default function KanbanView({
   columns: V2Column[];
   groups: V2Group[];
   items: V2Item[];
+  subtasks: Record<string, V2Subitem[]>;
   canWrite: boolean;
 }) {
   const router = useRouter();
@@ -177,6 +180,13 @@ export default function KanbanView({
                           {label}
                         </span>
                       )}
+                      <SubtaskList
+                        apiUrl={apiUrl}
+                        email={email}
+                        parentItemId={it.id}
+                        initial={subtasks[it.id] ?? []}
+                        canWrite={canWrite}
+                      />
                     </li>
                   );
                 })}
