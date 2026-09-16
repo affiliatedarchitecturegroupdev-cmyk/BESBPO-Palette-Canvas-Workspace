@@ -575,7 +575,55 @@ product surface and the directory side of it:
 `channel_members`, internal-visibility boundary already e2e-tested as
 "internal channel never visible to client"). This slice is mostly web routes;
 the risk is re-implementing the visibility filter client-side instead of relying
-on the server, which would be a security bug, not a UI bug.
+on the server, which would be a security bug, not a UI bug. Concretely:
+
+- Routes present: `POST/GET /channels`, `POST/GET /channels/:id/messages`
+  (the GET takes `parentMessageId` for thread replies), and
+  `POST /channels/:id/convert-external`, plus
+  `POST/GET /meetings` and `POST /meetings/:id/join`.
+- Capabilities already defined: `channels.read`, `channels.write`,
+  `meetings.write` (shared `Capability` enum). Nav has no comms entry yet, so
+  the work is a new route plus a `Connect`-section nav item gated on
+  `channels.read`.
+- Threads and mentions are server-side already: `postMessage` takes
+  `parentMessageId` and `mentions`, rejects a reply whose parent is in another
+  channel, and fans each mention out to a `notifications` row. The UI should
+  surface `mentions` as-is rather than resolving them itself.
+- The one thing the UI must **not** do is filter internal vs external on the
+  client. `requireChannel` refuses a client (`isClient`) any channel that is not
+  `external`, and `listChannels` filters by visibility in SQL. The web layer
+  should render whatever the API returns and let a 403 stand.
+- `convertToExternal` is the only path that ever changes a channel's visibility
+  and it is audited ("explicit, audited internal→external conversion") — do not
+  add a second, quieter path just to make a UI control convenient.
+
+**N3.1 — storage backend.** The file service exists (`files.service.ts`) with an
+S3-shaped seam; what is missing is the real backend behind it and raster
+thumbnails. Blocked on the human storage decision already flagged in N1; do not
+pick a provider to unblock it.
+
+**N3.2 — A-13 webhook hardening.** Outbound webhooks are **already** HMAC-signed
+(`integrations.service.ts` sets `x-palette-signature` with sha256 over the
+body) and delivered through the P6-11 job queue with retries. So the remaining
+work is narrower than the row's wording suggests: inbound signature
+*verification* where applicable, plus rate limits (only the auth resend throttle
+exists today — `RESEND_THROTTLE_MS`) and retention *enforcement* (the
+`/legal/retention` + `/legal/purge` endpoints exist and are audited, but nothing
+schedules them — there is no `@Cron` anywhere, and `jobs.service.ts` runs a
+polling `setInterval`, so a purge job would be enqueued onto that queue rather
+than adding a scheduler dependency).
+
+**N3.3 — public API versioning + importer apply.** API keys exist
+(`identity/api-keys.controller.ts`) but routes are unversioned. The import
+dry-run tooling is `scripts/import-dry-run.sh`; "apply" needs the write path
+behind the same validation the dry run already enforces, so the dry run's checks
+should move into shared code rather than being duplicated.
+
+**N3.4 — observability + DR drills.** The backup/restore and load drills exist
+as scripts (`scripts/backup.sh`, `restore-drill.sh`, `load-test.js`) but their
+last recorded runs were at 55 e2e checks; they must be re-run against the current
+schema before their evidence is quoted again. Health endpoints are per-module
+(`/email/status`, `/integrations/health`) rather than one aggregate probe.
 
 ### Explicitly deferred, and why
 
