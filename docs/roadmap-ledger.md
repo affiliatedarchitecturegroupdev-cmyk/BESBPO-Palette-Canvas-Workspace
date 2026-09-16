@@ -182,20 +182,51 @@ rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
 - Board page fetches `subitems()` per item and `timeline()` once, tolerating
   404 as "no timeline configured" rather than an error.
 - Gates: `npm run build` exit 0; **e2e 401 passed / 0 failed**; public-surface
-  gate OK; drift 0 findings across 105 rows; `scripts/loc.sh` 26,932 LoC /
-  228 files.
-- Browser QA (dev identity `ops@besbpo.example`): kanban renders subtasks nested
-  under their parents with a count; adding "Browser QA subtask" to "Final
-  lockups" persisted through a reload and appeared in `subitem` on the correct
-  parent; the Timeline tab rendered swimlanes, the date range header, and the
-  unscheduled list. Read-only check with `qa@besbpo.example` on an
-  engagement-less board: no add form, and the notice "Moving items requires the
-  items.write capability" instead. Cross-org board access as
-  `client-a@nimbus.example` returned the board-unavailable state.
-- Note on reproducing the read-only check: `/boards` is engagement-scoped for
-  non-org-wide readers (pre-existing N2.2 behaviour in `listBoards`), so a
-  same-org reviewer sees `[]` on an engagement board. A board with no
-  `engagement_id` is the way to exercise the non-writer path.
+  gate OK; drift 0 findings across 106 rows; `scripts/loc.sh` 25,052 LoC of
+  code (apps + packages + scripts; 27,104 including `docs/`). The doc figure is
+  not stable — `loc.sh` walks `docs/`, so every ledger edit moves it without any
+  code changing, which is why the code-only number is quoted first here.
+- Browser QA, re-run against a freshly seeded dev DB (the earlier pass was
+  recorded against identities and fixtures that do not exist: the dev seed is
+  all `@besbpo.example`, and the run order was `npm test` *then* browse, so the
+  e2e suite's truncate had already wiped anything a browser had created).
+  Verified this time with cookie `pc_user_email` on the tunnel host:
+  - `am@besbpo.example` (account_manager) → `/boards` lists the board; kanban
+    renders `subtasks (1)` nested under its parent; typing "UI-added subtask"
+    and pressing **add** persisted it — visible through reload *and* present in
+    `subitem` joined to the correct `parent_item_id`, attributed to `am`.
+  - Timeline tab rendered `Gantt view · positioned by **Due** · 2026-03-20 →
+    2026-03-21`, the swimlane `Lane one` with its one scheduled bar, and
+    `Not scheduled (2)` listing "Undated item · no date set" and
+    "Bad date item · date not parseable" — i.e. undated work is reported, not
+    silently dropped.
+  - `qa@besbpo.example` (quality_reviewer, `items.read` but not `items.write`)
+    on the same board: no add form, and the notice "You can read this board.
+    Moving items requires the items.write capability." Nav also collapsed to
+    the capability-gated subset. `POST .../subitems` as `qa` → **403
+    `missing items.write`**.
+- **Security finding — external roles can read internal boards (pre-existing,
+  not introduced by this slice).** Verified on the dev DB: a board with
+  `engagement_id IS NULL` in an `internal` workspace is readable by
+  `client-a@nimbus.example` (`client_approver`) — `GET /boards/:id`,
+  `/boards/:id/timeline`, and `/items/:id/subitems` all return **200**, and the
+  client sees the board's item names and columns. `boards.service.ts` consults
+  neither `workspace_type` nor `canSeeVisibility`; `requireBoard` only checks
+  org, `itemScope`, and `canSeeEngagement`, and `canSeeEngagement` returns
+  `!ctx.itemScope` for `engagement_id === null`, which is **true** for a
+  client_approver (`itemScope: null`, bounded by a `scopes[].workspaceId`,
+  not by `itemScope`). The same shape was confirmed on `main` @ `93a21f7`, so
+  it is not a regression from this branch — but `/timeline` and `/subitems` are
+  new surfaces that inherit it, which is why it is recorded here rather than
+  left to the audit. An engagement-scoped board *is* correctly refused (404).
+  The fix is a visibility check in `requireBoard`/`listBoards` and an e2e case
+  asserting a client cannot read an engagement-less internal board; it is not
+  attempted in this slice because it changes existing board access for every
+  role and belongs in a reviewed N2.4 with its own test.
+- Earlier recorded claims that browser QA used `ops@besbpo.example` and created
+  "Browser QA subtask" on "Final lockups", and that a cross-org
+  `client-a@nimbus.example` read "returned the board-unavailable state", were
+  wrong on all three counts and have been replaced by the above.
 
 ## Recently completed detail
 
@@ -482,6 +513,14 @@ still genuinely open:
    residency claim in §15.2 the privacy page is now tied to this decision (the
    page says Render and flags the UK question as open rather than asserting a
    location).
+7. **Board visibility boundary** — `boards.service.ts` enforces org, guest
+   (`itemScope`), and engagement scope, but never `workspace_type` or
+   `canSeeVisibility`. Net effect: an external role (`client_approver`,
+   `third_party_vendor`) can read an `engagement_id IS NULL` board in an
+   `internal` workspace, including its items, columns, timeline, and subtasks.
+   Reproduced on the dev DB; identical on `main` @ `93a21f7`, so it predates the
+   N2.2a surfaces that inherit it. Fix scoped to N2.4 with its own e2e case —
+   it changes board access for every role and should not ride a feature PR.
 
 ~~Dashboards~~ — delivered by V2 Phase 4 (PR #22), per the V2 rows above.
 ~~Legal/resource pages~~ — delivered V2 Phase 6 (PR #22), corrected by SPA-03/05.
@@ -517,11 +556,24 @@ abstraction either way and records the decision in `docs/decisions/`.
 | N2.2 | A-14 board UI: DnD board moves, global search over the V2 §9 model. Timeline/Gantt + subtasks are **not** in this slice | SPA-01 tokens | e2e: moves persist, reorder is gap-free, guest 403; browser: K search returns cross-board hits |
 | N2.2a | A-14 follow-up: timeline/Gantt renderer, subtasks, swimlanes | N2.2 | e2e: subtask parent/child round-trip; Gantt view renders off `date_column_id` |
 | N2.3 | Surface the V2 comms layer (§11) in the web app — channels, threads, mentions, meetings | N2.2 | browser pass; internal channel hidden from client |
+| N2.4 | Board visibility boundary: enforce `workspace_type`/`canSeeVisibility` in `requireBoard` + `listBoards` so external roles cannot read `internal`, engagement-less boards | N2.2a | e2e: client_approver and third_party_vendor get 403/404 on an internal board and its items/timeline/subitems; internal roles unaffected |
 
 Status: N2.1 and N2.2 are **done**; N2.2a is **in review** as PR #27 (see the
-rows above). **N2.3 is the next unblocked slice** once PR #27 merges — its API
-already exists, so no schema or service work is expected; the risk is
-client-side re-implementation of the visibility filter (noted below).
+rows above). Once PR #27 merges, **N2.4 is the next slice** — a pre-existing
+board visibility gap found during the N2.2a browser pass, and a prerequisite for
+trusting the "hidden from client" claims that N2.3 and later surfaces will make.
+**N2.3 follows N2.4**; its API already exists, so no schema or service work is
+expected; the risk is client-side re-implementation of the visibility filter
+(noted below).
+
+**N2.4 comes before N2.3 in priority despite the number.** N2.3 will add the
+first `channels` surface for external roles, and the channels layer *does*
+enforce visibility correctly (`requireChannel` refuses a client any non-`external`
+channel). Boards do not. Adding more external-facing surface on top of an
+unfixed boundary widens the blast radius of an existing issue, so close the
+board gap first — it is a small, well-bounded change with a clear test, and it
+is a prerequisite for trusting any later "hidden from client" claim about a new
+surface.
 
 ### Then — N3: honesty and operational maturity
 
@@ -641,7 +693,7 @@ schema before their evidence is quoted again. Health endpoints are per-module
 
 | Gate | Target | Actual | Status |
 | --- | --- | --- | --- |
-| LoC | ≥ 80k (Phase 6 exit) | 26,932 (`scripts/loc.sh`, 228 files) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate. (An earlier row cited ~37.6k from a looser ts/tsx/sql/sh/js count; `loc.sh` is the gate's own measure and is used here) |
+| LoC | ≥ 80k (Phase 6 exit) | 25,052 code (27,104 with `docs/`, `scripts/loc.sh`, 228 files) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate. (An earlier row cited ~37.6k from a looser ts/tsx/sql/sh/js count; `loc.sh` is the gate's own measure and is used here. `loc.sh` counts `docs/`, so the headline figure drifts with ledger edits; the code-only subtotal is the meaningful one) |
 | e2e | ≥ 320 checks | 401 (N2.2a) | met |
 | Permission tests | pass | pass | met |
 | Drift | 0 findings | 0 | met |
