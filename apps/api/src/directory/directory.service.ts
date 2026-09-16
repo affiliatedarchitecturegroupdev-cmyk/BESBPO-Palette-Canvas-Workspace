@@ -28,6 +28,13 @@ export interface ContactRow {
   role_label: string;
 }
 
+export interface MemberRow {
+  id: string;
+  email: string;
+  name: string;
+  roles: { role: string; scope_type: string; scope_id: string }[];
+}
+
 @Injectable()
 export class DirectoryService {
   constructor(private readonly db: Database) {}
@@ -91,5 +98,49 @@ export class DirectoryService {
       'INSERT INTO contact (id, agency_id, name, email, role_label) VALUES ($1, $2, $3, $4, $5) RETURNING *',
       [randomUUID(), agencyId, name, email, roleLabel],
     );
+  }
+
+  /**
+   * Org members with their bindings. Scoped by `person.org_id` (not by
+   * binding) so a member with no bindings still appears — an invited-but-bare
+   * account is exactly the state an admin needs to see.
+   */
+  async listMembers(orgId: string): Promise<MemberRow[]> {
+    const { rows } = await this.db.query<{
+      id: string;
+      email: string;
+      name: string;
+      role: string | null;
+      scope_type: string | null;
+      scope_id: string | null;
+    }>(
+      `SELECT p.id, p.email, p.name, rb.role, rb.scope_type, rb.scope_id
+       FROM person p
+       LEFT JOIN role_binding rb ON rb.person_id = p.id
+       WHERE p.org_id = $1
+       ORDER BY p.name, rb.role`,
+      [orgId],
+    );
+    const byId = new Map<string, MemberRow>();
+    for (const r of rows) {
+      const member = byId.get(r.id) ?? { id: r.id, email: r.email, name: r.name, roles: [] };
+      if (r.role && r.scope_type && r.scope_id) {
+        member.roles.push({ role: r.role, scope_type: r.scope_type, scope_id: r.scope_id });
+      }
+      byId.set(r.id, member);
+    }
+    return [...byId.values()];
+  }
+
+  /** Remove every binding a member holds in this org. Returns the count removed. */
+  async removeBindings(orgId: string, personId: string): Promise<number> {
+    const { rows } = await this.db.query<{ person_id: string }>(
+      `DELETE FROM role_binding rb
+       USING person p
+       WHERE rb.person_id = p.id AND p.id = $1 AND p.org_id = $2
+       RETURNING rb.person_id`,
+      [personId, orgId],
+    );
+    return rows.length;
   }
 }

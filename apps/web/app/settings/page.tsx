@@ -55,6 +55,7 @@ export default async function SettingsPage() {
             Identity, security and compliance surfaces live under governance.
           </p>
           <div style={{ display: 'grid', gap: 8 }}>
+            <SettingLink href="/settings/members" label="Members" detail="Invites, role bindings, and access" />
             <SettingLink href="/settings/sso" label="Single sign-on" detail="OIDC provider configuration" />
             <SettingLink href="/audit" label="Audit explorer" detail="Search the full action trail" />
             <SettingLink href="/account-health" label="Account health" detail="Agency engagement metrics" />

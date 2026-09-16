@@ -84,3 +84,20 @@ Prefer small, well-specified slices: "Add board permission tests for vendor and 
 - When a shell script captures a page body, use a helper that reads the body for
   exactly one URL (`body_of`). The `$(fetch A; fetch B; cat $file)` idiom
   clobbers a shared temp file and silently checks the wrong page.
+- The public-surface check runs as part of `npm test` (`test:public-surface` →
+  `scripts/public-surface-gate.sh`), which boots the built web app on an
+  ephemeral port. It was an optional script before, and that is how fabricated
+  legal content reached `main`: the check existed but nothing enforced it. Do
+  not move it back out of the test path.
+- A marker can be satisfied by shared chrome rather than the page under test —
+  the contact address appears in the footer on every route, so asserting it does
+  not prove anything about a specific page. Prefer page-unique text.
+- In `docs/roadmap-ledger.md`, `drift-check.js` treats *any* markdown table row
+  containing a status token cell (`done|todo|in-review|blocked|n/a`) as a ledger
+  row. Extra columns of prose in the planning tables ("Next phases") will be
+  parsed as rows and reported as unknown-status errors. Keep planning tables to
+  the four columns shown there; the main ledger table is the only place status
+  belongs.
+- Status semantics: `done` requires a merge reference (a PR number). Work that
+  is committed on a branch but awaiting the human merge gate is `in-review` and
+  must cite the branch. Do not mark a slice `done` from a branch tip.
