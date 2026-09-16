@@ -564,3 +564,42 @@ export async function boardDetail(email: string | null, boardId: string) {
 export async function searchItems(email: string | null, query: string) {
   return api<V2Item[]>(`/boards/search?q=${encodeURIComponent(query)}`, email);
 }
+
+export interface V2Subitem {
+  id: string;
+  parent_item_id: string;
+  engagement_id: string | null;
+  name: string;
+  column_values: Record<string, unknown>;
+  position: number;
+}
+
+export interface V2SubitemColumn {
+  id: string;
+  board_id: string;
+  name: string;
+  column_type: string;
+  config: Record<string, unknown>;
+  position: number;
+}
+
+export interface V2Timeline {
+  view: { id: string; name: string; viewType: string };
+  dateColumn: { id: string; name: string; columnType: string };
+  groups: Array<{ id: string; name: string }>;
+  bars: Array<{ itemId: string; name: string; groupId: string; start: string; end: string }>;
+  unscheduled: Array<{ id: string; name: string; reason: string }>;
+}
+
+export async function subitems(email: string | null, itemId: string) {
+  return api<V2Subitem[]>(`/boards/items/${itemId}/subitems`, email);
+}
+
+export async function subitemColumns(email: string | null, boardId: string) {
+  return api<V2SubitemColumn[]>(`/boards/${boardId}/subitem-columns`, email);
+}
+
+export async function timeline(email: string | null, boardId: string, viewId?: string) {
+  const qs = viewId ? `?viewId=${encodeURIComponent(viewId)}` : '';
+  return api<V2Timeline>(`/boards/${boardId}/timeline${qs}`, email);
+}
