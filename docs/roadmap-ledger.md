@@ -513,14 +513,17 @@ still genuinely open:
    residency claim in §15.2 the privacy page is now tied to this decision (the
    page says Render and flags the UK question as open rather than asserting a
    location).
-7. **Board visibility boundary** — `boards.service.ts` enforces org, guest
-   (`itemScope`), and engagement scope, but never `workspace_type` or
-   `canSeeVisibility`. Net effect: an external role (`client_approver`,
-   `third_party_vendor`) can read an `engagement_id IS NULL` board in an
-   `internal` workspace, including its items, columns, timeline, and subtasks.
-   Reproduced on the dev DB; identical on `main` @ `93a21f7`, so it predates the
-   N2.2a surfaces that inherit it. Fix scoped to N2.4 with its own e2e case —
-   it changes board access for every role and should not ride a feature PR.
+7. **Visibility boundary on boards and meetings** — `boards.service.ts`
+   enforces org, guest (`itemScope`), and engagement scope, but never
+   `workspace_type` or `canSeeVisibility`. Net effect: an external role
+   (`client_approver`, `third_party_vendor`) can read an `engagement_id IS NULL`
+   board in an `internal` workspace, including its items, columns, timeline, and
+   subtasks. The same shape exists in `comms.service.ts`: `listMeetings` filters
+   only by org and engagement, so a client is returned an engagement-less
+   internal meeting and `joinMeeting` will let it join. Reproduced on the dev DB;
+   the board case is identical on `main` @ `93a21f7`, so it predates the N2.2a
+   surfaces that inherit it. Fix scoped to N2.4 with its own e2e case — it
+   changes access for every role and should not ride a feature PR.
 
 ~~Dashboards~~ — delivered by V2 Phase 4 (PR #22), per the V2 rows above.
 ~~Legal/resource pages~~ — delivered V2 Phase 6 (PR #22), corrected by SPA-03/05.
@@ -556,7 +559,7 @@ abstraction either way and records the decision in `docs/decisions/`.
 | N2.2 | A-14 board UI: DnD board moves, global search over the V2 §9 model. Timeline/Gantt + subtasks are **not** in this slice | SPA-01 tokens | e2e: moves persist, reorder is gap-free, guest 403; browser: K search returns cross-board hits |
 | N2.2a | A-14 follow-up: timeline/Gantt renderer, subtasks, swimlanes | N2.2 | e2e: subtask parent/child round-trip; Gantt view renders off `date_column_id` |
 | N2.3 | Surface the V2 comms layer (§11) in the web app — channels, threads, mentions, meetings | N2.2 | browser pass; internal channel hidden from client |
-| N2.4 | Board visibility boundary: enforce `workspace_type`/`canSeeVisibility` in `requireBoard` + `listBoards` so external roles cannot read `internal`, engagement-less boards | N2.2a | e2e: client_approver and third_party_vendor get 403/404 on an internal board and its items/timeline/subitems; internal roles unaffected |
+| N2.4 | Visibility boundary for boards **and meetings**: enforce `workspace_type`/`canSeeVisibility` in `requireBoard` + `listBoards` so external roles cannot read `internal`, engagement-less boards; make `listMeetings`/`joinMeeting` refuse a client an engagement-less or internal meeting; add `Capability.MeetingsRead` and gate `GET /meetings` on it | N2.2a | e2e: client_approver and third_party_vendor get 403/404 on an internal board and on its items/timeline/subitems, and are not returned an engagement-less meeting; internal roles unaffected |
 
 Status: N2.1 and N2.2 are **done**; N2.2a is **in review** as PR #27 (see the
 rows above). Once PR #27 merges, **N2.4 is the next slice** — a pre-existing
@@ -566,14 +569,17 @@ trusting the "hidden from client" claims that N2.3 and later surfaces will make.
 expected; the risk is client-side re-implementation of the visibility filter
 (noted below).
 
-**N2.4 comes before N2.3 in priority despite the number.** N2.3 will add the
-first `channels` surface for external roles, and the channels layer *does*
-enforce visibility correctly (`requireChannel` refuses a client any non-`external`
-channel). Boards do not. Adding more external-facing surface on top of an
-unfixed boundary widens the blast radius of an existing issue, so close the
-board gap first — it is a small, well-bounded change with a clear test, and it
-is a prerequisite for trusting any later "hidden from client" claim about a new
-surface.
+**N2.4 comes before N2.3 in priority despite the number.** N2.3 adds the first
+external-facing comms surface. The channels layer *does* enforce the §11.2
+boundary correctly (`requireChannel` refuses a client any non-`external`
+channel, and `listChannels` pins a client to `external` in SQL), but the two
+surfaces N2.3 will sit next to do not: boards leak engagement-less internal
+boards to clients (gap 7), and `listMeetings`/`joinMeeting` leak
+engagement-less internal meetings to clients the same way. Building an
+external-facing comms UI on top of unfixed boundaries widens the blast radius of
+an existing issue, and it is not safe to keep making "hidden from client"
+claims — the exact claim N2.3's test shape asserts — while a known boundary gap
+is open. N2.4 is small, well-bounded, and has a clear test, so close it first.
 
 ### Then — N3: honesty and operational maturity
 
@@ -648,6 +654,60 @@ on the server, which would be a security bug, not a UI bug. Concretely:
 - `convertToExternal` is the only path that ever changes a channel's visibility
   and it is audited ("explicit, audited internal→external conversion") — do not
   add a second, quieter path just to make a UI control convenient.
+
+Gaps the code does **not** close, found by reading it rather than the plan.
+Each is small, but a UI built without deciding them will either ship a lie or a
+bug:
+
+- **`channel_member` is written and never read.** `join()` inserts rows on
+  create and `createChannel` accepts `memberIds`, but no query anywhere reads
+  the table — `listChannels` selects every non-archived channel in the org
+  (further filtered only by engagement and visibility), and `requireChannel`
+  checks org + visibility + engagement, never membership. So a channel is
+  effectively org-wide today, and the N2.3 UI must not draw a member list or a
+  "private to members" affordance that the server does not enforce. Either
+  wire membership into `listChannels`/`requireChannel` (its own slice with
+  tests, since it changes existing access) or render the channel as org-wide
+  and say so. Silently implying privacy that does not exist is the worst of the
+  three options.
+- **There is no `meetings.read` capability, and `GET /meetings` is not a read
+  endpoint.** `Capability.MeetingsWrite` is the only meeting capability in the
+  enum — `meetings.read` does not exist — and `GET /meetings` requires
+  *`MeetingsWrite`*. The guest path is fine (`listMeetings` special-cases
+  `ctx.itemScope` to meetings the person actually participates in, so a guest
+  sees only its own), so this is **not** the guest leak it first looks like.
+  What is real:
+  - The capability is misnamed for the operation. A read is gated on a write
+    cap, which means any future read-only role cannot be granted meeting
+    visibility without also granting it the ability to schedule and join.
+  - **`listMeetings` does not consult visibility or client status at all.**
+    Unlike `listChannels`, which pins a client to `visibility = 'external'`,
+    the meeting query filters only by org and (optionally) engagement, so an
+    external `client_approver` is returned an `engagement_id IS NULL` meeting —
+    e.g. an internal staffing sync — verbatim. Reproduced on the dev DB:
+    `am` created "Internal staffing sync" (no engagement) and
+    `client-a@nimbus.example`, same org, listed it.
+    This is the same class of gap as open gap 7 on boards and should be fixed
+    in the same slice (N2.4) rather than inside a UI PR.
+  - `joinMeeting` looks up the meeting by org only, so the same client can join
+    it too. Attendance is recorded honestly (§11.4) but the boundary is absent.
+  Decide the capability shape here (add `MeetingsRead`, gate reads on it) and
+  fix the visibility filter in N2.4 before the UI leans on `GET /meetings`.
+- **Every channel in the dev DB is `external`,** including one named "Internal
+  production". That is a fixture artefact — the e2e suite creates it with
+  `visibility: 'internal'` and then the "conversion is audited" test converts
+  it to external and the seed does not reset it — but it means a browser pass
+  against a *tested* DB can never show the internal-channel-hidden-from-client
+  path, which is the single most important behaviour in §11.2. Re-seed before
+  the N2.3 browser evidence, and assert internal visibility on a
+  `visibility='internal'` fixture, not on whatever the DB happens to hold.
+- Nav is `NAV_SECTIONS` in `apps/web/app/components/nav.ts`; the comms entry
+  belongs in the `connect` section gated on `channels.read` (which
+  `ClientApprover`, `ThirdPartyVendor`, `QualityReviewer` and
+  `AgencyContributor` all hold, so the empty-state and read-only paths need
+  designs, not just the writer path). The web API client is
+  `apps/web/lib/api.ts` (`api<T>(path, email, init)` returns `{ error }` rather
+  than throwing, so every new call must branch on that shape).
 
 **N3.1 — storage backend.** The file service exists (`files.service.ts`) with an
 S3-shaped seam; what is missing is the real backend behind it and raster
