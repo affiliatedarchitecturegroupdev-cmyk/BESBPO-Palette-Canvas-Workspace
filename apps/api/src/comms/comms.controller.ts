@@ -88,7 +88,7 @@ export class CommsController {
   @Get('meetings')
   async listMeetings(@Headers('x-user-email') email: string | undefined, @Query('engagementId') engagementId?: string) {
     const ctx = await this.identity.resolve(email);
-    this.authz.require(ctx, Capability.MeetingsWrite);
+    this.authz.require(ctx, Capability.MeetingsRead);
     return this.comms.listMeetings(ctx, engagementId);
   }
 

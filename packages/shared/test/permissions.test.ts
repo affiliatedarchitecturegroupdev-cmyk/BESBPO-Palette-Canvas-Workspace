@@ -376,4 +376,27 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
 
 }
 
+// N2.4: reading the schedule is a separate grant from booking it.
+{
+  if (!can([Role.QualityReviewer], Capability.MeetingsRead)) {
+    throw new Error('quality reviewer must read the meeting schedule');
+  }
+  if (can([Role.QualityReviewer], Capability.MeetingsWrite)) {
+    throw new Error('quality reviewer must not book meetings');
+  }
+  if (can([Role.ThirdPartyVendor], Capability.MeetingsRead)) {
+    throw new Error('vendor has no schedule access');
+  }
+  if (!can([Role.ClientApprover], Capability.MeetingsRead) ||
+      !can([Role.ClientApprover], Capability.MeetingsWrite)) {
+    throw new Error('client may read and book meetings on its engagement');
+  }
+  // Every role that may book must also be able to read the schedule back.
+  for (const role of Object.values(Role)) {
+    if (can([role], Capability.MeetingsWrite) && !can([role], Capability.MeetingsRead)) {
+      throw new Error(`${role} can book a meeting it cannot read back`);
+    }
+  }
+}
+
 console.log('permission tests passed');

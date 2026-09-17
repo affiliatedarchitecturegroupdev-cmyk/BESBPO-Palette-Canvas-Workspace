@@ -9,6 +9,8 @@ import {
   SYSTEM_COLUMN_TYPES,
   UserContext,
   ViewType,
+  VisibilityLevel,
+  canSeeVisibility,
 } from '@palette-canvas/shared';
 import { Database } from '../db/database';
 import { AuditService } from '../audit/audit.service';
@@ -24,6 +26,8 @@ export interface BoardRow {
   is_template: boolean;
   cloned_from: string | null;
   position: number;
+  /** Joined from `workspace` by the boundary queries; absent on freshly inserted rows. */
+  workspace_type?: 'client' | 'internal';
 }
 
 export interface ColumnRow {
@@ -193,19 +197,17 @@ export class BoardsService {
 
   async listWorkspaces(ctx: UserContext) {
     if (ctx.itemScope) return [];
-    if (this.isDivisionWide(ctx)) {
-      const { rows } = await this.db.query(
-        'SELECT * FROM workspace WHERE org_id = $1 AND archived_at IS NULL ORDER BY created_at DESC',
-        [ctx.orgId],
-      );
-      return rows;
-    }
-    const { rows } = await this.db.query(
-      `SELECT * FROM workspace WHERE org_id = $1 AND archived_at IS NULL
-         AND (engagement_id IS NULL OR engagement_id = $2) ORDER BY created_at DESC`,
-      [ctx.orgId, ctx.engagementId ?? '__none__'],
+    const { rows } = await this.db.query<{ engagement_id: string | null; workspace_type: 'client' | 'internal' }>(
+      `SELECT * FROM workspace WHERE org_id = $1 AND archived_at IS NULL ORDER BY created_at DESC`,
+      [ctx.orgId],
     );
-    return rows;
+    // Visibility first, then engagement scope: an internal workspace is not a
+    // client's to discover even though it has no engagement to scope against.
+    return rows.filter(
+      (w) =>
+        (w.workspace_type !== 'internal' || canSeeVisibility(ctx, VisibilityLevel.Internal)) &&
+        this.canSeeEngagement(ctx, w.engagement_id),
+    );
   }
 
   /* ---------------- boards ---------------- */
@@ -272,19 +274,16 @@ export class BoardsService {
 
   async listBoards(ctx: UserContext): Promise<BoardRow[]> {
     if (ctx.itemScope) return [];
-    if (this.isDivisionWide(ctx)) {
-      const { rows } = await this.db.query<BoardRow>(
-        'SELECT * FROM board WHERE org_id = $1 AND archived_at IS NULL ORDER BY position, created_at',
-        [ctx.orgId],
-      );
-      return rows;
-    }
+    // Engage the joined `workspace_type` for the filter below (see
+    // `visibleBoards`). A board carries a denormalised `engagement_id`, but the
+    // internal/client distinction lives on its workspace.
     const { rows } = await this.db.query<BoardRow>(
-      `SELECT * FROM board WHERE org_id = $1 AND archived_at IS NULL
-         AND (engagement_id IS NULL OR engagement_id = $2) ORDER BY position, created_at`,
-      [ctx.orgId, ctx.engagementId ?? '__none__'],
+      `SELECT b.*, w.workspace_type FROM board b JOIN workspace w ON w.id = b.workspace_id
+       WHERE b.org_id = $1 AND b.archived_at IS NULL AND w.archived_at IS NULL
+       ORDER BY b.position, b.created_at`,
+      [ctx.orgId],
     );
-    return rows;
+    return rows.filter((b) => this.canSeeBoard(ctx, b));
   }
 
   async boardDetail(ctx: UserContext, boardId: string) {
@@ -1030,14 +1029,16 @@ export class BoardsService {
   }
 
   private async requireBoard(ctx: UserContext, boardId: string): Promise<BoardRow> {
-    const board = await this.db.oneOrNull<BoardRow>('SELECT * FROM board WHERE id = $1 AND org_id = $2', [
-      boardId,
-      ctx.orgId,
-    ]);
+    const board = await this.db.oneOrNull<BoardRow>(
+      `SELECT b.*, w.workspace_type FROM board b JOIN workspace w ON w.id = b.workspace_id
+       WHERE b.id = $1 AND b.org_id = $2`,
+      [boardId, ctx.orgId],
+    );
     if (!board) throw new NotFoundException('board not found');
     // Guests never see the board an item lives on (§14.3).
     if (ctx.itemScope) throw new ForbiddenException('guest cannot read boards');
     if (!this.canSeeEngagement(ctx, board.engagement_id)) throw new ForbiddenException('board out of scope');
+    if (!this.canSeeBoardVisibility(ctx, board)) throw new ForbiddenException('board is internal');
     return board;
   }
 
@@ -1045,9 +1046,33 @@ export class BoardsService {
     return ctx.roles.some((r) => DIVISION_WIDE.includes(r as string));
   }
 
+  /**
+   * The internal/external boundary on a board. An `internal` workspace is
+   * staff-only; a `client` workspace is not additionally restricted here —
+   * engagement scope is `canSeeEngagement`'s job. `canSeeVisibility` cannot be
+   * used for the client case because it reads `ctx.scopes`, which only
+   * agency/project bindings populate; engagement-bound users carry their
+   * boundary in `ctx.engagementId` instead.
+   */
+  private canSeeBoardVisibility(ctx: UserContext, board: BoardRow): boolean {
+    const workspaceType = board.workspace_type;
+    if (!workspaceType) return true; // pre-join callers: no visibility facts
+    if (workspaceType === 'internal') return canSeeVisibility(ctx, VisibilityLevel.Internal);
+    return true;
+  }
+
+  /** Board visibility + engagement scope, for both reads and list filters. */
+  private canSeeBoard(ctx: UserContext, board: BoardRow): boolean {
+    return (
+      this.canSeeEngagement(ctx, board.engagement_id) && this.canSeeBoardVisibility(ctx, board)
+    );
+  }
+
   private canSeeEngagement(ctx: UserContext, engagementId: string | null): boolean {
-    // Internal (engagement-less) resources are staff-only.
-    if (engagementId === null) return !ctx.itemScope;
+    // Engagement-less resources belong to an internal workspace, so the
+    // question is the visibility boundary, not scope membership. Returning
+    // `!ctx.itemScope` here was wrong: a client has no itemScope either.
+    if (engagementId === null) return canSeeVisibility(ctx, VisibilityLevel.Internal);
     if (this.isDivisionWide(ctx)) return true;
     if (ctx.engagementId) return ctx.engagementId === engagementId;
     // Legacy agency/project scopes keep working for un-migrated users.
