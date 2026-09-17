@@ -621,10 +621,44 @@ work — rather than by roadmap number. P8, A-01 and V2 Phases 1–6 are all don
 what remains is the A-block (A-02…A-16), the platform-surface long tail, and the
 V1 scale targets from `docs/roadmap.md` Phase 6.
 
-### Immediate — N1: unblock the identity chain (A-02 → A-03 → A-04)
+### Current position (2026-09-17)
 
-The whole remaining A-block stacks on one missing piece. Recommended split into
-reviewable slices, each its own PR per `AGENTS.md`:
+N1 (`b25e715`), N2.1/N2.2/N2.2a (`93a21f7` / `727a1f3`) and N2.4 (`495457f`) are
+merged. **N2.3 is the only open slice**, in review as PR #29 on
+`n2.3-comms-surface`. Everything in the N2 band is therefore either merged or
+awaiting review; the next agent should not start new work until N2.3 merges, but
+the queue behind it is decided and does not depend on it:
+
+1. **N3.2 — webhook hardening** (rate limits + retention enforcement). This is
+   the highest-leverage open item because it is *unblocked*: the outbound HMAC
+   signing and the P6-11 queue already exist, and `N1.1` (the transport seam it
+   was waiting on) is merged. Its remaining scope is narrower than the row
+   wording — see the scoping note below.
+2. **N3.3 — API versioning + importer apply**, equally unblocked (`P7-04` API
+   keys and the P8-11 dry run are both merged).
+3. **N3.4 — DR drill refresh**, which is cheap but was last run at 55 e2e checks
+   and its quoted evidence is stale; keep it here rather than quoting the old
+   numbers.
+4. **A-05 → A-07** (MFA enforcement, deactivation/export/sessions, settings) —
+   the A-block tail, all with their dependencies (A-02/A-03/A-04) merged.
+
+**Still gated on a human decision, do not start:** **N3.1 / A-16** depend on the
+storage-provider choice, and the email-provider choice (`ADR-0002` D1) remains
+open even though the transport seam is built. Neither is a coding decision and
+an agent picking a provider to "unblock" would be inventing a product decision.
+
+**One diagnostic worth handing over.** The N2.3 findings were both access
+holes that the *planning notes did not predict* — the notes actually asserted
+the comms boundary was already correct, and the capability claim in them
+(`ThirdPartyVendor` holds `channels.read`) was wrong. Both were found by probing
+the running API with a scoped identity, not by reading code. N3.2 and N3.3
+touch the same kind of surface (webhook secrets, API keys), so probe them with a
+low-privilege caller before trusting the notes.
+
+### Immediate — N1: unblock the identity chain (A-02 → A-03 → A-04) — **done**
+
+The whole remaining A-block stacked on one missing piece. Delivered as
+`b25e715` (PR #25); the slices below are kept for the record.
 
 | Slice | Scope | Depends on | Test shape |
 | --- | --- | --- | --- |
