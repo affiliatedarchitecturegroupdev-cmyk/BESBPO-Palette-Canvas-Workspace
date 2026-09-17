@@ -399,4 +399,41 @@ function ctx(roles: Role[], visibilityScope: VisibilityLevel[]): UserContext {
   }
 }
 
+// N2.3: the nav gates /comms and /meetings on `channels.read` and
+// `meetings.read`. That makes the capability matrix load-bearing for whether a
+// person can reach the V2 comms surface at all, so pin the roles it hinges on
+// here rather than discovering a silently-empty page later.
+{
+  if (!can([Role.ProductionLead], Capability.ChannelsRead) ||
+      !can([Role.ProductionLead], Capability.ChannelsWrite)) {
+    throw new Error('production lead must read and write channels');
+  }
+  // The reviewer reads conversation without being able to post to it.
+  if (!can([Role.QualityReviewer], Capability.ChannelsRead)) {
+    throw new Error('quality reviewer must read channels');
+  }
+  if (can([Role.QualityReviewer], Capability.ChannelsWrite)) {
+    throw new Error('quality reviewer must not post to channels');
+  }
+  if (can([Role.ThirdPartyVendor], Capability.ChannelsRead)) {
+    throw new Error('vendor has no channel access');
+  }
+  if (!can([Role.ClientApprover], Capability.ChannelsRead)) {
+    throw new Error('client may read the channels it can see');
+  }
+  if (!can([Role.Guest], Capability.MeetingsRead)) {
+    throw new Error('a guest may reach its own meeting');
+  }
+  if (can([Role.Guest], Capability.ChannelsRead)) {
+    throw new Error('a guest never reaches the channel list');
+  }
+  // A role that can post to a channel must be able to read the list that
+  // reaches it, or the composer is unreachable.
+  for (const role of Object.values(Role)) {
+    if (can([role], Capability.ChannelsWrite) && !can([role], Capability.ChannelsRead)) {
+      throw new Error(`${role} can post to a channel it cannot list`);
+    }
+  }
+}
+
 console.log('permission tests passed');

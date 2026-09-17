@@ -94,7 +94,7 @@ export class CommsService {
     // A client only ever sees external channels, whatever else it is a member
     // of (§11.2). Guests see nothing at channel level at all.
     if (ctx.itemScope) return [];
-    const isClient = ctx.roles.some((r) => ['client_approver', 'third_party_vendor'].includes(r as string));
+    const isClient = this.isExternalRole(ctx);
     const { rows } = await this.db.query<ChannelRow>(
       `SELECT c.* FROM channel c
        WHERE c.org_id = $1 AND c.archived_at IS NULL
@@ -104,6 +104,27 @@ export class CommsService {
       [ctx.orgId, engagementId ?? ctx.engagementId ?? null, isClient ? ChannelVisibility.External : null],
     );
     return rows;
+  }
+
+  private isExternalRole(ctx: UserContext): boolean {
+    return ctx.roles.some((r) => ['client_approver', 'third_party_vendor'].includes(r as string));
+  }
+
+  /**
+   * Whether this caller could have got the channel from `listChannels` at all.
+   * `listChannels` pins an external role to `external` channels and narrows a
+   * scoped caller to its own engagement; the by-id path must agree, or the
+   * difference between the list and the gate becomes an access hole.
+   *
+   * Division-wide roles (`platform_owner`, `operations_director`) deliberately
+   * see every channel in the org, matching the list's `ctx.engagementId` null.
+   */
+  private canReachChannel(ctx: UserContext, channel: ChannelRow): boolean {
+    if (this.isExternalRole(ctx) && channel.visibility !== ChannelVisibility.External) return false;
+    const scoped = ctx.engagementId ?? null;
+    if (!scoped) return true;
+    if (this.isDivisionWide(ctx)) return true;
+    return channel.engagement_id === scoped;
   }
 
   async postMessage(
@@ -141,8 +162,13 @@ export class CommsService {
       ],
     );
 
-    // Mentions elevate to a notification so the @mention is never missed.
-    for (const personId of input.mentions ?? []) {
+    // Mentions elevate to a notification so the @mention is never missed. A
+    // mention is addressed by person id, not by role, so without this check an
+    // internal channel could notify an external client that a message exists —
+    // and the notification carries the channel name. Notifying someone who
+    // cannot read the message is the leak, whether or not they can open it.
+    const notified = await this.visibleMentionRecipients(channel, input.mentions ?? []);
+    for (const personId of notified) {
       await this.db.query(
         `INSERT INTO notification (id, org_id, recipient_id, kind, target_type, target_id, message)
          VALUES ($1,$2,$3,'mention','message',$4,$5)`,
@@ -155,6 +181,62 @@ export class CommsService {
       mentions: (input.mentions ?? []).length,
     });
     return message;
+  }
+
+  /**
+   * Mentions addressed to people who could not read the channel are dropped.
+   * The message is still posted and the mention still recorded on it — the
+   * mention was directed at someone, and honest bookkeeping is better than
+   * silently rewriting the body. Only the notification, which is the thing that
+   * reaches outside the channel, is withheld.
+   *
+   * Scope is resolved the way `IdentityService.resolve` resolves it: an
+   * agency/project binding narrows through its engagement, so a client bound
+   * that way is treated as belonging to the same engagement the request path
+   * would have used.
+   */
+  private async visibleMentionRecipients(
+    channel: ChannelRow,
+    mentions: string[],
+  ): Promise<string[]> {
+    if (mentions.length === 0) return [];
+    const isInternal = channel.visibility !== ChannelVisibility.External;
+    const { rows } = await this.db.query<{
+      person_id: string;
+      role: string;
+      scope_type: string;
+      engagement_id: string | null;
+    }>(
+      `SELECT rb.person_id, rb.role, rb.scope_type,
+              CASE rb.scope_type
+                WHEN 'engagement' THEN rb.scope_id
+                WHEN 'agency'     THEN (SELECT e.id FROM engagement e WHERE e.agency_id = rb.scope_id ORDER BY e.created_at LIMIT 1)
+                WHEN 'project'    THEN (SELECT e.id FROM engagement e WHERE e.project_id = rb.scope_id ORDER BY e.created_at LIMIT 1)
+                ELSE NULL
+              END AS engagement_id
+         FROM role_binding rb
+        WHERE rb.person_id = ANY($1::text[])`,
+      [mentions],
+    );
+    const byPerson = new Map<string, { role: string; scope_type: string; engagement_id: string | null }[]>();
+    for (const r of rows) {
+      byPerson.set(r.person_id, [...(byPerson.get(r.person_id) ?? []), r]);
+    }
+    return mentions.filter((personId) => {
+      const bindings = byPerson.get(personId) ?? [];
+      const isExternal = bindings.some((b) =>
+        ['client_approver', 'third_party_vendor'].includes(b.role),
+      );
+      if (isInternal && isExternal) return false;
+      // Only engagement-scoped bindings narrow; organisation bindings leave the
+      // person org-wide, which is how a staff mention keeps working today.
+      const scoped = bindings
+        .filter((b) => b.scope_type === 'engagement' || b.scope_type === 'agency' || b.scope_type === 'project')
+        .map((b) => b.engagement_id)
+        .filter((id): id is string => id !== null);
+      if (scoped.length === 0) return true;
+      return channel.engagement_id !== null && scoped.includes(channel.engagement_id);
+    });
   }
 
   async listMessages(ctx: UserContext, channelId: string, parentMessageId?: string) {
@@ -311,6 +393,13 @@ export class CommsService {
     return ctx.roles.some((r) => ['platform_owner', 'operations_director'].includes(r as string));
   }
 
+  /**
+   * The single channel access gate. `listChannels` narrows the list by
+   * engagement and visibility; this must narrow identically or a channel that
+   * is absent from the list stays reachable by id — which is how a client could
+   * post into another engagement's external channel, and how a scoped user
+   * could read a channel its own list omits.
+   */
   private async requireChannel(ctx: UserContext, channelId: string): Promise<ChannelRow> {
     const channel = await this.db.oneOrNull<ChannelRow>(
       'SELECT * FROM channel WHERE id = $1 AND org_id = $2',
@@ -318,11 +407,16 @@ export class CommsService {
     );
     if (!channel) throw new NotFoundException('channel not found');
     // A client must never reach an internal channel, membership aside (§11.2).
-    const isClient = ctx.roles.some((r) => ['client_approver', 'third_party_vendor'].includes(r as string));
+    // The status differs from the scope refusal below on purpose: an internal
+    // channel is a categorical bar for an external role and has answered 403
+    // since §11.2 shipped; a scope mismatch is answered 404 so it stays
+    // indistinguishable from a channel that does not exist.
+    const isClient = this.isExternalRole(ctx);
     if (isClient && channel.visibility !== ChannelVisibility.External) {
       throw new ForbiddenException('channel is internal');
     }
     if (ctx.itemScope) throw new ForbiddenException('guest cannot read channels');
+    if (!this.canReachChannel(ctx, channel)) throw new NotFoundException('channel not found');
     return channel;
   }
 }

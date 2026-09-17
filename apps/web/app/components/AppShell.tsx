@@ -543,6 +543,8 @@ function iconFor(href: string): string {
     '/reports': '◰',
     '/commercial': '£',
     '/directory': '☰',
+    '/comms': '◌',
+    '/meetings': '◷',
     '/notifications': '◆',
     '/integrations': '⇄',
     '/account-health': '♥',

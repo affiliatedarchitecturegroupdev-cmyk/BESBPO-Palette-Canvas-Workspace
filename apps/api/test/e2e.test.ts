@@ -1965,6 +1965,108 @@ async function main() {
     );
     check('conversion is audited', convertAudit.rows.length === 1);
 
+    /* ------------------------------------------------------------------ */
+    /* N2.3 findings: the by-id gate and the mention fan-out must agree     */
+    /* with the list, not merely with the visibility flag.                  */
+    /* ------------------------------------------------------------------ */
+    console.log('\n-- V2: channel by-id gate matches the list (N2.3)');
+
+    // An external channel on Engagement B. `client-a@test.example` is bound to
+    // Engagement A, so this is absent from its list — and must be unreachable
+    // by id too, or the list is decorative.
+    const engBExternal = await api(base, '/comms/channels', {
+      email: 'lead@test.example', method: 'POST',
+      body: { name: 'Engagement B external', visibility: 'external', engagementId: engB },
+    });
+    const engBExternalId = (engBExternal.json as { id: string }).id;
+    check('external channel created on Engagement B', engBExternal.status === 201);
+
+    const clientListEngB = await api(base, '/comms/channels', { email: 'client-a@test.example' });
+    const clientSeesEngB = (clientListEngB.json as Array<{ id: string }>).some((c) => c.id === engBExternalId);
+    check('cross-engagement external channel absent from the client list', !clientSeesEngB);
+
+    const clientReadsCrossEngagement = await api(base, `/comms/channels/${engBExternalId}/messages`, {
+      email: 'client-a@test.example',
+    });
+    check('cross-engagement challenge read is 404, not 200', clientReadsCrossEngagement.status === 404);
+
+    const clientPostsCrossEngagement = await api(base, `/comms/channels/${engBExternalId}/messages`, {
+      email: 'client-a@test.example', method: 'POST', body: { body: 'cross-engagement write' },
+    });
+    check('cross-engagement post is 404, not 201', clientPostsCrossEngagement.status === 404);
+
+    // The refusal is invisible-channel-shaped, not forbidden: a 404 discloses
+    // nothing about whether the channel exists.
+    const clientReadsItsOwn = await api(base, `/comms/channels/${externalChannelId}/messages`, {
+      email: 'client-a@test.example',
+    });
+    check('client still reads its own engagement channel', clientReadsItsOwn.status === 200);
+
+    console.log('\n-- V2: mentions never notify outside the channel (§11.2)');
+
+    // A second internal channel, this one engagement-less: the client can read
+    // neither it nor anything mentioned from it.
+    const staffOnly = await api(base, '/comms/channels', {
+      email: 'lead@test.example', method: 'POST',
+      body: { name: 'Staff only', visibility: 'internal' },
+    });
+    const staffOnlyId = (staffOnly.json as { id: string }).id;
+    check('engagement-less internal channel created', staffOnly.status === 201);
+
+    const beforeLeak = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM notification WHERE recipient_id = $1 AND kind = 'mention'`,
+      [clientPerson],
+    );
+    await api(base, `/comms/channels/${staffOnlyId}/messages`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { body: 'staff-only note', mentions: [clientPerson] },
+    });
+    const afterLeak = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM notification WHERE recipient_id = $1 AND kind = 'mention'`,
+      [clientPerson],
+    );
+    check(
+      'mentioning a client on an internal channel raises no notification',
+      beforeLeak.rows[0].n === afterLeak.rows[0].n,
+    );
+
+    // The staff mention must keep working — the filter is about visibility,
+    // not about suppressing mentions generally.
+    const amMentionsBefore = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM notification WHERE recipient_id = $1 AND kind = 'mention'`,
+      [amId],
+    );
+    await api(base, `/comms/channels/${staffOnlyId}/messages`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { body: 'staff-only note for the am', mentions: [amId] },
+    });
+    const amMentionsAfter = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM notification WHERE recipient_id = $1 AND kind = 'mention'`,
+      [amId],
+    );
+    check(
+      'staff mention on an internal channel still notifies',
+      Number(amMentionsAfter.rows[0].n) === Number(amMentionsBefore.rows[0].n) + 1,
+    );
+
+    // A client mention on an external channel it can read still notifies.
+    const clientMentionsBefore = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM notification WHERE recipient_id = $1 AND kind = 'mention'`,
+      [clientPerson],
+    );
+    await api(base, `/comms/channels/${externalChannelId}/messages`, {
+      email: 'lead@test.example', method: 'POST',
+      body: { body: 'client-visible mention', mentions: [clientPerson] },
+    });
+    const clientMentionsAfter = await pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM notification WHERE recipient_id = $1 AND kind = 'mention'`,
+      [clientPerson],
+    );
+    check(
+      'client mention on an external channel still notifies',
+      Number(clientMentionsAfter.rows[0].n) === Number(clientMentionsBefore.rows[0].n) + 1,
+    );
+
     console.log('\n-- V2: meetings record attendance honestly (§11.4)');
 
     const badMeeting = await api(base, '/comms/meetings', {

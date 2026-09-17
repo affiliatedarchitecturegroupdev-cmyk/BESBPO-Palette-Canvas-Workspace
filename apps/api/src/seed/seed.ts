@@ -390,6 +390,111 @@ async function seed() {
     console.log('phase-6 ops seed data added');
   }
 
+  // ---- V2 comms (§11): an engagement, both workspace types, channels and
+  // meetings on both sides of the visibility boundary.
+  //
+  // Without these the comms surfaces have nothing to show, and the one
+  // behaviour that matters most in §11.2 — an internal channel never reaching
+  // a client — cannot be demonstrated at all. `client-a@nimbus.example` is
+  // agency-scoped, so it resolves its engagement through `agency_id`; the
+  // engagement below is what gives it a scope to be excluded *from*.
+  {
+    const amId = (await pool.query('SELECT id FROM person WHERE email = $1', ['am@besbpo.example'])).rows[0].id;
+    const leadId = (await pool.query('SELECT id FROM person WHERE email = $1', ['lead@besbpo.example'])).rows[0].id;
+    const clientId = (await pool.query('SELECT id FROM person WHERE email = $1', ['client-a@nimbus.example'])).rows[0].id;
+    const projectId = (
+      await pool.query('SELECT id FROM project WHERE org_id = $1 AND name = $2', [orgId, 'Nimbus rebrand'])
+    ).rows[0]?.id ?? null;
+
+    let engagementId = (await pool.query('SELECT id FROM engagement WHERE org_id = $1 AND name = $2', [orgId, 'Nimbus rebrand']))
+      .rows[0]?.id as string | undefined;
+    if (!engagementId) {
+      engagementId = randomUUID();
+      await pool.query(
+        'INSERT INTO engagement (id, org_id, agency_id, project_id, name) VALUES ($1,$2,$3,$4,$5)',
+        [engagementId, orgId, agencyA, projectId, 'Nimbus rebrand'],
+      );
+      console.log('engagement seeded: Nimbus rebrand');
+    }
+
+    for (const ws of [
+      { name: 'Nimbus rebrand', engagementId, workspaceType: 'client' },
+      { name: 'Studio floor', engagementId: null, workspaceType: 'internal' },
+    ]) {
+      const exists = await pool.query('SELECT id FROM workspace WHERE org_id = $1 AND name = $2', [orgId, ws.name]);
+      if (!exists.rows.length) {
+        await pool.query(
+          `INSERT INTO workspace (id, org_id, engagement_id, name, workspace_type, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6)`,
+          [randomUUID(), orgId, ws.engagementId, ws.name, ws.workspaceType, amId],
+        );
+      }
+    }
+
+    // One external channel the client may read, one internal channel they must
+    // never see. Same engagement, so the only difference is the boundary.
+    const channels: Array<{ name: string; visibility: 'internal' | 'external'; engagementId: string | null; members: string[] }> = [
+      { name: 'Nimbus client updates', visibility: 'external', engagementId, members: [clientId] },
+      { name: 'Nimbus production', visibility: 'internal', engagementId, members: [] },
+      { name: 'Studio leadership', visibility: 'internal', engagementId: null, members: [] },
+    ];
+    for (const c of channels) {
+      const exists = await pool.query('SELECT id FROM channel WHERE org_id = $1 AND name = $2', [orgId, c.name]);
+      if (exists.rows.length) continue;
+      const channelId = randomUUID();
+      await pool.query(
+        `INSERT INTO channel (id, org_id, engagement_id, name, channel_type, visibility, created_by)
+         VALUES ($1,$2,$3,$4,'threaded',$5,$6)`,
+        [channelId, orgId, c.engagementId, c.name, c.visibility, leadId],
+      );
+      for (const personId of [leadId, ...c.members]) {
+        await pool.query(
+          `INSERT INTO channel_member (channel_id, person_id, role) VALUES ($1,$2,$3)
+           ON CONFLICT (channel_id, person_id) DO NOTHING`,
+          [channelId, personId, personId === leadId ? 'owner' : 'member'],
+        );
+      }
+      if (c.visibility === 'external') {
+        const rootId = randomUUID();
+        await pool.query(
+          `INSERT INTO message (id, org_id, channel_id, engagement_id, body, mentions, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [rootId, orgId, channelId, engagementId, 'First cut of the logo suite is ready for review.', [clientId], leadId],
+        );
+        await pool.query(
+          `INSERT INTO message (id, org_id, channel_id, engagement_id, parent_message_id, body, created_by)
+           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+          [randomUUID(), orgId, channelId, engagementId, rootId, 'Alt cut attached in the thread.', leadId],
+        );
+      }
+    }
+
+    // An engagement-bound meeting a client may join, and an engagement-less
+    // (internal) one it must not see or join.
+    const meetings: Array<{ title: string; engagementId: string | null; days: number; roomRef: string }> = [
+      { title: 'Nimbus weekly review', engagementId, days: 2, roomRef: 'room-nimbus' },
+      { title: 'Internal staffing sync', engagementId: null, days: 3, roomRef: 'room-internal' },
+    ];
+    for (const m of meetings) {
+      const exists = await pool.query('SELECT id FROM meeting WHERE org_id = $1 AND title = $2', [orgId, m.title]);
+      if (exists.rows.length) continue;
+      const meetingId = randomUUID();
+      await pool.query(
+        `INSERT INTO meeting (id, org_id, engagement_id, title, starts_at, duration_mins, room_ref, created_by)
+         VALUES ($1,$2,$3,$4, now() + ($5 || ' days')::interval, 45, $6, $7)`,
+        [meetingId, orgId, m.engagementId, m.title, String(m.days), m.roomRef, amId],
+      );
+      for (const personId of [amId, leadId]) {
+        await pool.query(
+          'INSERT INTO meeting_participant (meeting_id, person_id) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+          [meetingId, personId],
+        );
+      }
+    }
+
+    console.log('v2 comms seed data added (channels + meetings, both visibilities)');
+  }
+
   await pool.end();
   console.log('seed complete');
 }

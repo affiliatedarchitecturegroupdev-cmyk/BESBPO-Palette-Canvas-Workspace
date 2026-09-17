@@ -133,9 +133,90 @@ rows record the correction. Branch `spec-package-assets-alignment`, PR #24.
 | N2.1 | Public-surface check moved into `npm test`; `body_of` clobbering documented | done | PR #25 `b25e715` | `npm test` now runs `test:public-surface` → `scripts/public-surface-gate.sh`, which boots the built app on an ephemeral port and rebuilds when sources are newer than `BUILD_ID`; negative-tested by removing `POPIA` from the privacy page → gate failed exit 1; green when restored; CI step for the standalone check removed as redundant | The check was a separate CI step nobody ran locally, which is how fabricated legal content reached `main`. Gate lives with the tests now, so a local `npm test` catches the same drift CI does |
 | N2.2 | A-14 board moves + global search (API + web) | done | PR #26 `93a21f7` | e2e: move between groups lands in the destination; reorder before a sibling leaves a gap-free ordered list; `beforeItemId` outside the destination group 400; guest move 403; move audited; search finds by name, empty on no match, guest search returns nothing; 374 passed / 0 failed. Browser: `/boards` lists, `/boards/:id` renders groups + status labels, ⌘K search returns "Acme launch film" | `POST /boards/items/:itemId/move` (park-then-reorder) and `GET /boards/search`, hoisted above `@Get(':id')` so `search` is not read as a board id. `apps/web/app/boards/*` + `KanbanView.tsx` (optimistic reorder mirroring the server rule, rollback on rejection) + `GlobalSearch.tsx`. Timeline/Gantt and subtasks split to N2.2a. Correction: `subitem` + `parent_item_id` **do** exist in migration 010 — the gap is that no service or UI code reads them, not a missing migration |
 | N2.2a | A-14 follow-up: subtasks, timeline/Gantt renderer, swimlanes | done | PR #27 merged as `727a1f3` | e2e: subitem round-trip with parent/engagement inheritance; subitem column validation (labels required, unknown type 400); subitem write scoped to parent (cross-board column rejected); guest subitem read/write 403; timeline 404 with no gantt/calendar view; bad `date_column_id` 400; date cell → one-day bar; `{from,to}` → spanned bar; unscheduled items reported with reason, not dropped; unparseable date yields no bar; guest timeline 403; `board.subitem_column_added` / `group.created` / `group.updated` audited; **401 passed / 0 failed**. Browser: kanban nests subtasks under parents; adding a subtask persists through reload; timeline tab renders swimlanes + date range + unscheduled list; read-only role sees no add form and a capability notice | Service + controller + web only, no migration (`subitem`/`subitem_column`/`board_group`/`board_view` already in 010). `readDateSpan` accepts both `date` (ISO string) and `timeline` (`{from,to}`) shapes and returns null for anything else, so the caller reports rather than guesses. Timeline resolves its date source from the view's `config.date_column_id` — it never picks a column itself |
-| N2.4 | Visibility boundary for boards **and meetings** (internal/engagement-less never reaches an external role) | in-review | PR #28 | e2e: internal workspace + board created; client board list excludes the internal board; client `GET /boards/:id` on it 403; client workspace list excludes the internal workspace; staff (AM) still read it 200; engagement-less meeting invisible to the client list and `join` 403; client may still book + join on its own engagement (201); reviewer with `meetings.read` lists (200) but cannot book (403); shared tests assert the read/write split and that no role can book a meeting it cannot read; **414 passed / 0 failed**; permission tests + public-surface gate green | `Capability.MeetingsRead` added; `GET /meetings` re-gated from `MeetingsWrite` to it (a read-only role could not otherwise see the schedule). `canSeeEngagement(null)` now asks `canSeeVisibility(Internal)` instead of `!ctx.itemScope` — a client has no itemScope either, which was the leak. `requireBoard`/`listBoards` join `workspace.workspace_type`; `listWorkspaces` and `listMeetings` filter the same way; `scheduleMeeting` refuses to create a meeting the creator could not read back. The client-side case is guarded only for `internal`: `canSeeVisibility` reads `ctx.scopes`, which only agency/project bindings populate, so engagement-bound users are scoped by `ctx.engagementId` instead |
+| N2.4 | Visibility boundary for boards **and meetings** (internal/engagement-less never reaches an external role) | done | PR #28 merged as `495457f` | e2e: internal workspace + board created; client board list excludes the internal board; client `GET /boards/:id` on it 403; client workspace list excludes the internal workspace; staff (AM) still read it 200; engagement-less meeting invisible to the client list and `join` 403; client may still book + join on its own engagement (201); reviewer with `meetings.read` lists (200) but cannot book (403); shared tests assert the read/write split and that no role can book a meeting it cannot read; **414 passed / 0 failed**; permission tests + public-surface gate green | `Capability.MeetingsRead` added; `GET /meetings` re-gated from `MeetingsWrite` to it (a read-only role could not otherwise see the schedule). `canSeeEngagement(null)` now asks `canSeeVisibility(Internal)` instead of `!ctx.itemScope` — a client has no itemScope either, which was the leak. `requireBoard`/`listBoards` join `workspace.workspace_type`; `listWorkspaces` and `listMeetings` filter the same way; `scheduleMeeting` refuses to create a meeting the creator could not read back. The client-side case is guarded only for `internal`: `canSeeVisibility` reads `ctx.scopes`, which only agency/project bindings populate, so engagement-bound users are scoped by `ctx.engagementId` instead |
+| N2.3 | Surface the V2 comms layer (§11) in the web app — channels, threads, mentions, meetings | in-review | branch `n2.3-comms-surface` | e2e: cross-engagement external channel is absent from the client list and 404 by id on read *and* write (was 200/201 — an access hole); client still reads its own engagement channel; a client mentioned on an internal channel raises no notification, while a staff mention on the same channel still notifies and a client mention on an external channel still notifies; **423 passed / 0 failed**; permission tests + public-surface gate + production build green; browser pass on both roles (`/comms`, `/comms/[id]`, `/meetings`) incl. internal-channel-by-URL refused for the client | Two access-control findings beyond the UI slice, both fixed here (see detail). Web renders whatever the API returns and never re-filters visibility client-side. `/comms` + `/meetings` added to the `connect` nav section on `channels.read` / `meetings.read`; badge tones use palette-supported tokens. Seed gained V2 comms fixtures (channels + meetings, both visibilities) so §11.2 is demonstrable on a seeded DB |
 
 ## Recently completed detail
+
+### N2.3 — V2 comms surface in the web app (§11) (2026-09-17)
+
+- Branch: `n2.3-comms-surface`, based on `main` at `495457f` (PR #28, which was
+  the precondition — N2.4 had to land first so the "hidden from client" claim
+  this slice makes is one the server actually enforces).
+- Web (new routes, no migration — the comms API and schema were already there):
+  - `apps/web/app/comms/page.tsx` — channel list with visibility badge and the
+    engagement/division scope, read from the API payload.
+  - `apps/web/app/comms/[id]/page.tsx` + `ChannelView.tsx` — channel detail:
+    composer, threaded replies, mention picker, and the audited
+    convert-to-external action. A channel the caller cannot see renders the
+    "Channel unavailable" state rather than a partial page.
+  - `apps/web/app/meetings/page.tsx` + `MeetingActions.tsx` — meeting list with
+    the read/write split driven by capability, plus join recording attendance.
+  - Nav entries in the `connect` section (`nav.ts`), gated on `channels.read`
+    and `meetings.read`; icons registered in `AppShell.iconFor`.
+- **The web layer does not filter visibility.** `listChannels` pins a client to
+  `external` in SQL and `requireChannel` refuses an internal channel; every page
+  renders whatever the API returned and lets a 403/404 stand. Re-filtering in
+  the browser would be a security bug wearing a UI costume, and the N2.3
+  planning notes flagged it as the slice's main risk.
+- Two access-control findings, found by probing the running API rather than by
+  reading the plan. Both are in the comms service and both were reachable
+  *before* this slice — the UI only made them relevant:
+  1. **The by-id gate did not match the list.** `listChannels` narrowed by
+     `ctx.engagementId` and pinned a client to `external`, but `requireChannel`
+     checked only org and visibility. So an external channel belonging to
+     *another* engagement was absent from the client's list yet readable by id
+     (`GET .../messages` 200) and writable (`POST` 201) — the list was
+     decorative. Worse, the gap cut both ways: a scoped staff member could read
+     by id a channel their own list omitted. Fixed by `canReachChannel`, which
+     resolves the same predicate the list uses (external role → `external`;
+     scoped caller → its own engagement, with `platform_owner` /
+     `operations_director` explicitly exempt as division-wide). A scope mismatch
+     answers **404**, so an invisible channel stays indistinguishable from one
+     that does not exist. The pre-existing internal-channel refusal keeps its
+     tested **403** rather than being quietly reshaped to fit the new helper.
+  2. **A mention notified a client about an internal message.**
+     `postMessage` fanned `mentions` straight into `notification` rows without
+     asking whether the recipient could read the channel. A lead mentioning a
+     client on an internal channel raised "You were mentioned in *Nimbus
+     production*" in that client's inbox — the channel name leaked even though
+     the message itself stayed behind the 403. Now `visibleMentionRecipients`
+     drops mentions addressed to someone who cannot read the channel, resolving
+     agency/project bindings through their engagement exactly as
+     `IdentityService.resolve` does. The message still posts and the mention is
+     still recorded *on* it; only the notification — the part that reaches
+     outside the channel — is withheld. Staff-to-staff mentions on an internal
+     channel and client mentions on an external channel both still notify, which
+     the e2e asserts so the filter cannot silently become "suppress mentions".
+- Gates: `npm run build` exit 0 (route manifest includes `/comms`,
+  `/comms/[id]`, `/meetings`); **e2e 423 passed / 0 failed**; permission tests
+  and the public-surface gate green via root `npm test` exit 0.
+- Browser QA, on a re-seeded dev DB (the e2e suite truncates every domain table,
+  so a browser pass recorded before the last `npm test` is describing rows that
+  no longer exist — re-seed first, then browse):
+  - Lead: `/comms` lists channels with visibility badges and scope;
+    `/comms/[id]` renders composer, threads, mentions and the convert action;
+    a posted internal message persisted and was attributed correctly; convert
+    on a throwaway internal channel recorded
+    `channel.converted_external {reason: "client asked to join this thread (QA probe)"}`.
+  - Client: `/comms` limited to external channels; the internal channel by URL
+    renders "Channel unavailable"; a cross-engagement external channel is 404
+    on read and write; the client inbox stays empty when mentioned on an
+    internal channel.
+  - Meetings: read-only role sees the schedule without the booking form; lead
+    books and joins; attendance recorded (`Nimbus weekly review | joined=t`).
+- Disclosure: the N2.3 planning notes claimed `ThirdPartyVendor` holds
+  `channels.read`. It does not — `packages/shared` grants that role only
+  `ProjectsRead`, `NotificationsRead`, `EventsStream`, `BoardsRead` and
+  `ItemsRead`, so the vendor paths remain unreachable. The permissions test pins
+  the real matrix (`vendor has no channel access`); no vendor-shaped branch was
+  built to satisfy a claim the matrix contradicts.
+- Residual, deliberately unchanged: `channel_member` is still written and never
+  read, so a channel remains org-wide within its engagement and the UI draws no
+  member list or privacy affordance (the planning notes call silently implying
+  privacy "the worst of the three options"). Wiring membership into
+  `listChannels`/`requireChannel` changes access for every existing channel and
+  belongs in its own reviewed slice with its own tests.
 
 ### N2.2a — A-14 subtasks, timeline/Gantt, swimlanes (2026-09-16)
 
@@ -540,10 +621,44 @@ work — rather than by roadmap number. P8, A-01 and V2 Phases 1–6 are all don
 what remains is the A-block (A-02…A-16), the platform-surface long tail, and the
 V1 scale targets from `docs/roadmap.md` Phase 6.
 
-### Immediate — N1: unblock the identity chain (A-02 → A-03 → A-04)
+### Current position (2026-09-17)
 
-The whole remaining A-block stacks on one missing piece. Recommended split into
-reviewable slices, each its own PR per `AGENTS.md`:
+N1 (`b25e715`), N2.1/N2.2/N2.2a (`93a21f7` / `727a1f3`) and N2.4 (`495457f`) are
+merged. **N2.3 is the only open slice**, in review as PR #29 on
+`n2.3-comms-surface`. Everything in the N2 band is therefore either merged or
+awaiting review; the next agent should not start new work until N2.3 merges, but
+the queue behind it is decided and does not depend on it:
+
+1. **N3.2 — webhook hardening** (rate limits + retention enforcement). This is
+   the highest-leverage open item because it is *unblocked*: the outbound HMAC
+   signing and the P6-11 queue already exist, and `N1.1` (the transport seam it
+   was waiting on) is merged. Its remaining scope is narrower than the row
+   wording — see the scoping note below.
+2. **N3.3 — API versioning + importer apply**, equally unblocked (`P7-04` API
+   keys and the P8-11 dry run are both merged).
+3. **N3.4 — DR drill refresh**, which is cheap but was last run at 55 e2e checks
+   and its quoted evidence is stale; keep it here rather than quoting the old
+   numbers.
+4. **A-05 → A-07** (MFA enforcement, deactivation/export/sessions, settings) —
+   the A-block tail, all with their dependencies (A-02/A-03/A-04) merged.
+
+**Still gated on a human decision, do not start:** **N3.1 / A-16** depend on the
+storage-provider choice, and the email-provider choice (`ADR-0002` D1) remains
+open even though the transport seam is built. Neither is a coding decision and
+an agent picking a provider to "unblock" would be inventing a product decision.
+
+**One diagnostic worth handing over.** The N2.3 findings were both access
+holes that the *planning notes did not predict* — the notes actually asserted
+the comms boundary was already correct, and the capability claim in them
+(`ThirdPartyVendor` holds `channels.read`) was wrong. Both were found by probing
+the running API with a scoped identity, not by reading code. N3.2 and N3.3
+touch the same kind of surface (webhook secrets, API keys), so probe them with a
+low-privilege caller before trusting the notes.
+
+### Immediate — N1: unblock the identity chain (A-02 → A-03 → A-04) — **done**
+
+The whole remaining A-block stacked on one missing piece. Delivered as
+`b25e715` (PR #25); the slices below are kept for the record.
 
 | Slice | Scope | Depends on | Test shape |
 | --- | --- | --- | --- |
@@ -566,20 +681,26 @@ abstraction either way and records the decision in `docs/decisions/`.
 | N2.3 | Surface the V2 comms layer (§11) in the web app — channels, threads, mentions, meetings | N2.2 | browser pass; internal channel hidden from client |
 | N2.4 | Visibility boundary for boards **and meetings**: enforce `workspace_type`/`canSeeVisibility` in `requireBoard` + `listBoards` so external roles cannot read `internal`, engagement-less boards; make `listMeetings`/`joinMeeting` refuse a client an engagement-less or internal meeting; add `Capability.MeetingsRead` and gate `GET /meetings` on it | N2.2a | e2e: client_approver and third_party_vendor get 403/404 on an internal board and on its items/timeline/subitems, and are not returned an engagement-less meeting; internal roles unaffected |
 
-Status: N2.1, N2.2 and N2.2a are **done** (PR #27 merged as `727a1f3`); N2.4 is
-**in review** as PR #28. N2.4 closed the pre-existing board visibility gap found
-during the N2.2a browser pass, widened to cover meetings, and was a prerequisite
-for trusting the "hidden from client" claims that N2.3 and later surfaces make.
-**N2.3 follows N2.4.** Its API exists, so the slice is mostly web routes; but it
-is *not* purely UI — the scoping notes below identify membership and
-meeting-capability decisions that are service work, and the visibility filter
-must stay server-side. Settle those before or with the UI, not after.
+Status: N2.1, N2.2, N2.2a and N2.4 are **done** (PR #27 merged as `727a1f3`;
+PR #28 merged as `495457f`). N2.3 is **in review** on branch
+`n2.3-comms-surface`. N2.4 closed the pre-existing board visibility gap found
+during the N2.2a browser pass, widened it to cover meetings, and was a
+prerequisite for trusting the "hidden from client" claims that N2.3 and later
+surfaces make.
+**N2.3 follows N2.4.** Its API existed, so the slice was mostly web routes; but
+it was *not* purely UI — probing the running API surfaced two comms-service
+access holes (by-id gate narrower than the list; mention fan-out ignoring
+visibility), both fixed in the same slice because a UI that renders the list
+makes them reachable in practice. The visibility filter stayed server-side.
 
 **Why N2.4 came before N2.3 despite the number.** N2.3 adds the first
-external-facing comms surface. The channels layer *does* enforce the §11.2
-boundary correctly (`requireChannel` refuses a client any non-`external`
-channel, and `listChannels` pins a client to `external` in SQL), but the two
-surfaces N2.3 sits next to did not: boards leaked engagement-less internal
+external-facing comms surface. The channels layer's *visibility* rule was the
+one part that held (`requireChannel` refused a client any non-`external`
+channel, and `listChannels` pinned a client to `external` in SQL) — though N2.3
+later found that rule had a companion hole: the by-id gate did not narrow by
+engagement the way the list did, and mention fan-out ignored visibility
+entirely. What was unambiguously broken was the two
+surfaces N2.3 sits next to: boards leaked engagement-less internal
 boards to clients (gap 7, now fixed), and `listMeetings`/`joinMeeting` leaked
 engagement-less internal meetings to clients the same way. Building an
 external-facing comms UI on top of unfixed boundaries would widen the blast
@@ -636,7 +757,11 @@ product surface and the directory side of it:
   renderer, and swimlanes all landed there against the existing schema, so no
   part of the §9 collaboration surface remains unimplemented.
 
-**N2.3 — V2 comms surface.** The API exists (`comms.controller.ts`, channels +
+**N2.3 — V2 comms surface.** *(Done — see the completed-detail entry above. The
+notes below are the pre-work scoping read; the two access holes they did not
+predict — the by-id gate narrower than the list, and mention fan-out ignoring
+visibility — were found by probing the running API and are recorded there.)*
+The API exists (`comms.controller.ts`, channels +
 `channel_members`, internal-visibility boundary already e2e-tested as
 "internal channel never visible to client"). This slice is mostly web routes;
 the risk is re-implementing the visibility filter client-side instead of relying
@@ -705,19 +830,20 @@ bug:
     absent.
 
   </details>
-- **Every channel in the dev DB is `external`,** including one named "Internal
-  production". That is a fixture artefact — the e2e suite creates it with
-  `visibility: 'internal'` and then the "conversion is audited" test converts
-  it to external and the seed does not reset it — but it means a browser pass
-  against a *tested* DB can never show the internal-channel-hidden-from-client
-  path, which is the single most important behaviour in §11.2. Re-seed before
-  the N2.3 browser evidence, and assert internal visibility on a
-  `visibility='internal'` fixture, not on whatever the DB happens to hold.
+- **~~Every channel in the dev DB is `external`,~~ including one named
+  "Internal production".** *Closed in N2.3:* the cause was an e2e artefact —
+  the suite creates "Internal production" with `visibility: 'internal'` and then
+  the "conversion is audited" test converts it to external, and the e2e suite
+  truncates every domain table besides. The seed now writes both visibilities
+  (`Nimbus production` and `Studio leadership` internal, `Nimbus client
+  updates` external), so §11.2 is demonstrable on a freshly seeded DB — which
+  is also the only order that works: `npm test` first, then `npm run seed`,
+  then browse. The N2.3 browser evidence asserted the internal-channel refusal
+  against a seeded `visibility='internal'` row, not against whatever the DB held.
 - Nav is `NAV_SECTIONS` in `apps/web/app/components/nav.ts`; the comms entry
-  belongs in the `connect` section gated on `channels.read` (which
-  `ClientApprover`, `ThirdPartyVendor`, `QualityReviewer` and
-  `AgencyContributor` all hold, so the empty-state and read-only paths need
-  designs, not just the writer path). The web API client is
+  went in the `connect` section gated on `channels.read`. (The `ThirdPartyVendor`
+  half of this note was wrong: that role holds no `channels.read` at all — see
+  the N2.3 disclosure.) The web API client is
   `apps/web/lib/api.ts` (`api<T>(path, email, init)` returns `{ error }` rather
   than throwing, so every new call must branch on that shape).
 
