@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { ChannelType, ChannelVisibility, UserContext } from '@palette-canvas/shared';
+import { ChannelType, ChannelVisibility, UserContext, VisibilityLevel, canSeeVisibility } from '@palette-canvas/shared';
 import { Database } from '../db/database';
 import { AuditService } from '../audit/audit.service';
 
@@ -207,6 +207,10 @@ export class CommsService {
     if (!input.roomRef && !input.externalUrl) {
       throw new BadRequestException('a meeting needs either a roomRef or an externalUrl');
     }
+    const meetingEngagement = input.engagementId ?? ctx.engagementId ?? null;
+    // Booking a meeting its creator could not read back would hand a client an
+    // internal meeting by the front door.
+    this.assertMeetingVisible(ctx, meetingEngagement);
     const meeting = await this.db.one(
       `INSERT INTO meeting (id, org_id, engagement_id, item_id, title, starts_at, duration_mins,
                             room_ref, external_url, created_by)
@@ -239,11 +243,12 @@ export class CommsService {
    * the honest-recording behaviour the spec asks for at §11.4.
    */
   async joinMeeting(ctx: UserContext, meetingId: string) {
-    const meeting = await this.db.oneOrNull<{ id: string }>(
-      'SELECT id FROM meeting WHERE id = $1 AND org_id = $2',
+    const meeting = await this.db.oneOrNull<{ id: string; engagement_id: string | null }>(
+      'SELECT id, engagement_id FROM meeting WHERE id = $1 AND org_id = $2',
       [meetingId, ctx.orgId],
     );
     if (!meeting) throw new NotFoundException('meeting not found');
+    this.assertMeetingVisible(ctx, meeting.engagement_id);
     const row = await this.db.oneOrNull(
       `UPDATE meeting_participant SET joined_at = now()
        WHERE meeting_id = $1 AND person_id = $2 AND joined_at IS NULL RETURNING *`,
@@ -269,12 +274,41 @@ export class CommsService {
       );
       return rows;
     }
-    const { rows } = await this.db.query(
-      `SELECT * FROM meeting WHERE org_id = $1
-         AND ($2::text IS NULL OR engagement_id = $2) ORDER BY starts_at`,
-      [ctx.orgId, engagementId ?? ctx.engagementId ?? null],
+    // The engagement filter alone was not a boundary: a client passed
+    // `engagementId` as null and got every engagement-less (internal) meeting
+    // in the org. An explicit `engagementId` also lets a caller name another
+    // engagement, so it is only honoured when it is one the caller may see.
+    const { rows } = await this.db.query<{ engagement_id: string | null }>(
+      `SELECT * FROM meeting WHERE org_id = $1 ORDER BY starts_at`,
+      [ctx.orgId],
     );
-    return rows;
+    const requested = engagementId ?? null;
+    return rows.filter((m) => {
+      if (requested !== null && m.engagement_id !== requested) return false;
+      return this.canSeeMeetingEngagement(ctx, m.engagement_id);
+    });
+  }
+
+  /**
+   * Meeting visibility mirrors the channel rule (§11.2): an engagement-less
+   * meeting is internal, and internal never reaches a client. The engagement
+   * predicate narrows it further for staff.
+   */
+  private canSeeMeetingEngagement(ctx: UserContext, engagementId: string | null): boolean {
+    if (engagementId === null) return canSeeVisibility(ctx, VisibilityLevel.Internal);
+    if (this.isDivisionWide(ctx)) return true;
+    if (ctx.engagementId) return ctx.engagementId === engagementId;
+    return ctx.scopes.some((s) => s.workspaceId === engagementId);
+  }
+
+  private assertMeetingVisible(ctx: UserContext, engagementId: string | null): void {
+    if (!this.canSeeMeetingEngagement(ctx, engagementId)) {
+      throw new ForbiddenException('meeting is internal');
+    }
+  }
+
+  private isDivisionWide(ctx: UserContext): boolean {
+    return ctx.roles.some((r) => ['platform_owner', 'operations_director'].includes(r as string));
   }
 
   private async requireChannel(ctx: UserContext, channelId: string): Promise<ChannelRow> {

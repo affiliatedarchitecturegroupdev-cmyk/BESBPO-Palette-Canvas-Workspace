@@ -1999,6 +1999,86 @@ async function main() {
     );
     check('attendance recorded only on actual join', joinedRow.rows[0]?.joined_at !== null);
 
+    console.log('\n-- V2: visibility boundary for boards + meetings (N2.4)');
+
+    // An internal (engagement-less) workspace and board, owned by the AM.
+    const internalWs = await api(base, '/boards/workspaces', {
+      email: 'am@test.example', method: 'POST',
+      body: { name: 'Internal planning', workspaceType: 'internal' },
+    });
+    const internalWsId = (internalWs.json as { id: string }).id;
+    check('internal workspace created', internalWs.status === 201);
+
+    const internalBoard = await api(base, '/boards', {
+      email: 'am@test.example', method: 'POST',
+      body: { workspaceId: internalWsId, name: 'Internal margin model' },
+    });
+    const internalBoardId = (internalBoard.json as { id: string }).id;
+    check('internal board created', internalBoard.status === 201);
+
+    const clientList = await api(base, '/boards', { email: 'client-a@test.example' });
+    const clientIds = (clientList.json as Array<{ id: string }>).map((b) => b.id);
+    check('client board list excludes the internal board', !clientIds.includes(internalBoardId));
+
+    const clientReadsInternal = await api(base, `/boards/${internalBoardId}`, { email: 'client-a@test.example' });
+    check('client reading an internal board is refused (403)', clientReadsInternal.status === 403);
+
+    const clientSeesInternalWs = await api(base, '/boards/workspaces', { email: 'client-a@test.example' });
+    const clientWsIds = (clientSeesInternalWs.json as Array<{ id: string }>).map((w) => w.id);
+    check('client workspace list excludes the internal workspace', !clientWsIds.includes(internalWsId));
+
+    // The AM keeps its access — the boundary must not block staff.
+    const amReadsInternal = await api(base, `/boards/${internalBoardId}`, { email: 'am@test.example' });
+    check('staff still read the internal board', amReadsInternal.status === 200);
+
+    // An internal meeting (no engagement) is likewise invisible to the client.
+    // Booked by a division-wide role, whose context carries no engagement — an
+    // engagement-bound AM would otherwise have its own engagement stamped on it.
+    const internalMeeting = await api(base, '/comms/meetings', {
+      email: 'ops@test.example', method: 'POST',
+      body: { title: 'Internal margin review', startsAt: new Date(Date.now() + 7200_000).toISOString(), roomRef: 'internal-room' },
+    });
+    const internalMeetingId = (internalMeeting.json as { id: string }).id;
+    check('internal meeting scheduled', internalMeeting.status === 201);
+
+    const clientMeetings = await api(base, '/comms/meetings', { email: 'client-a@test.example' });
+    const clientMeetingIds = (clientMeetings.json as Array<{ id: string }>).map((m) => m.id);
+    check('client meeting list excludes the internal meeting', !clientMeetingIds.includes(internalMeetingId));
+
+    const clientJoinsInternal = await api(base, `/comms/meetings/${internalMeetingId}/join`, {
+      email: 'client-a@test.example', method: 'POST',
+    });
+    check('client joining an internal meeting is refused (403)', clientJoinsInternal.status === 403);
+
+    // A client may still book and join a meeting on its own engagement.
+    const clientMeeting = await api(base, '/comms/meetings', {
+      email: 'client-a@test.example', method: 'POST',
+      body: { title: 'Client A review', startsAt: new Date(Date.now() + 3600_000).toISOString(), roomRef: 'client-room', engagementId: engA },
+    });
+    check('client schedules a meeting on its own engagement', clientMeeting.status === 201);
+    const clientMeetingId = (clientMeeting.json as { id: string }).id;
+    const clientJoinsOwn = await api(base, `/comms/meetings/${clientMeetingId}/join`, {
+      email: 'client-a@test.example', method: 'POST',
+    });
+    check('client joins its own engagement meeting', clientJoinsOwn.status === 201);
+
+    // Read-only meeting access: the reviewer reads but may not book.
+    const reviewerPeople = randomUUID();
+    await pool.query('INSERT INTO person (id, org_id, email, name) VALUES ($1,$2,$3,$4)', [
+      reviewerPeople, orgId, 'reviewer@test.example', 'Quality Reviewer',
+    ]);
+    await pool.query(
+      `INSERT INTO role_binding (person_id, role, scope_type, scope_id) VALUES ($1,'quality_reviewer','engagement',$2)`,
+      [reviewerPeople, engA],
+    );
+    const reviewerReads = await api(base, '/comms/meetings', { email: 'reviewer@test.example' });
+    check('reviewer with meetings.read can list meetings', reviewerReads.status === 200);
+    const reviewerBooks = await api(base, '/comms/meetings', {
+      email: 'reviewer@test.example', method: 'POST',
+      body: { title: 'Read-only attempt', startsAt: new Date(Date.now() + 3600_000).toISOString(), roomRef: 'r' },
+    });
+    check('reviewer without meetings.write cannot book (403)', reviewerBooks.status === 403);
+
     console.log('\n-- V2: files/DAM version chain (§13)');
 
     const fileV1 = await api(base, '/files', {
