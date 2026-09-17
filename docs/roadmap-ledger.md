@@ -677,29 +677,34 @@ bug:
   tests, since it changes existing access) or render the channel as org-wide
   and say so. Silently implying privacy that does not exist is the worst of the
   three options.
-- **There is no `meetings.read` capability, and `GET /meetings` is not a read
-  endpoint.** `Capability.MeetingsWrite` is the only meeting capability in the
-  enum — `meetings.read` does not exist — and `GET /meetings` requires
-  *`MeetingsWrite`*. The guest path is fine (`listMeetings` special-cases
-  `ctx.itemScope` to meetings the person actually participates in, so a guest
-  sees only its own), so this is **not** the guest leak it first looks like.
-  What is real:
-  - The capability is misnamed for the operation. A read is gated on a write
-    cap, which means any future read-only role cannot be granted meeting
-    visibility without also granting it the ability to schedule and join.
-  - **`listMeetings` does not consult visibility or client status at all.**
-    Unlike `listChannels`, which pins a client to `visibility = 'external'`,
-    the meeting query filters only by org and (optionally) engagement, so an
-    external `client_approver` is returned an `engagement_id IS NULL` meeting —
+- **~~There is no `meetings.read` capability~~ — closed in N2.4 (PR #28).**
+  `Capability.MeetingsRead` now exists, `GET /meetings` is gated on it (so a
+  read-only role can be given the schedule without booking rights), and the
+  visibility filter is fixed: engagement-less (internal) meetings no longer
+  reach a client through `listMeetings` or `joinMeeting`, and `scheduleMeeting`
+  refuses to create one the creator could not read back. The guest path was
+  already fine (`listMeetings` special-cases `ctx.itemScope` to meetings the
+  person participates in), so this was never a guest leak. N2.3 can now lean on
+  `GET /meetings` as the read it claims to be. The residual is unchanged: the
+  UI must still render whatever the API returns rather than re-filtering
+  client-side.
+  <details><summary>Original finding (kept for the record)</summary>
+
+  - The capability was misnamed for the operation: a read gated on a write cap,
+    so any future read-only role could not be granted meeting visibility
+    without also granting it the ability to schedule and join.
+  - `listMeetings` did not consult visibility or client status at all. Unlike
+    `listChannels`, which pins a client to `visibility = 'external'`, the
+    meeting query filtered only by org and (optionally) engagement, so an
+    external `client_approver` was returned an `engagement_id IS NULL` meeting —
     e.g. an internal staffing sync — verbatim. Reproduced on the dev DB:
     `am` created "Internal staffing sync" (no engagement) and
     `client-a@nimbus.example`, same org, listed it.
-    This is the same class of gap as open gap 7 on boards and should be fixed
-    in the same slice (N2.4) rather than inside a UI PR.
-  - `joinMeeting` looks up the meeting by org only, so the same client can join
-    it too. Attendance is recorded honestly (§11.4) but the boundary is absent.
-  Decide the capability shape here (add `MeetingsRead`, gate reads on it) and
-  fix the visibility filter in N2.4 before the UI leans on `GET /meetings`.
+  - `joinMeeting` looked up the meeting by org only, so the same client could
+    join it too. Attendance was recorded honestly (§11.4) but the boundary was
+    absent.
+
+  </details>
 - **Every channel in the dev DB is `external`,** including one named "Internal
   production". That is a fixture artefact — the e2e suite creates it with
   `visibility: 'internal'` and then the "conversion is audited" test converts
@@ -761,7 +766,7 @@ schema before their evidence is quoted again. Health endpoints are per-module
 | Gate | Target | Actual | Status |
 | --- | --- | --- | --- |
 | LoC | ≥ 80k (Phase 6 exit) | 25,052 code (27,104 with `docs/`, `scripts/loc.sh`, 228 files) | not met — Phase 6 exit was written for the PDF's full build-out, not the V2 net-new. Do not pad code to close a volume gate. (An earlier row cited ~37.6k from a looser ts/tsx/sql/sh/js count; `loc.sh` is the gate's own measure and is used here. `loc.sh` counts `docs/`, so the headline figure drifts with ledger edits; the code-only subtotal is the meaningful one) |
-| e2e | ≥ 320 checks | 401 (N2.2a) | met |
+| e2e | ≥ 320 checks | 414 (N2.4) | met |
 | Permission tests | pass | pass | met |
 | Drift | 0 findings | 0 | met |
 
