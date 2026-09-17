@@ -48,6 +48,8 @@ export const NAV_SECTIONS: NavSection[] = [
     id: 'connect',
     title: 'Connect',
     items: [
+      { href: '/comms', label: 'Channels', capability: 'channels.read' },
+      { href: '/meetings', label: 'Meetings', capability: 'meetings.read' },
       { href: '/directory', label: 'Directory', capability: 'directory.read' },
       { href: '/notifications', label: 'Inbox', badge: 'notifications', capability: 'notifications.read' },
       { href: '/integrations', label: 'Integrations', capability: 'integrations.read' },

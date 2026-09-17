@@ -603,3 +603,52 @@ export async function timeline(email: string | null, boardId: string, viewId?: s
   const qs = viewId ? `?viewId=${encodeURIComponent(viewId)}` : '';
   return api<V2Timeline>(`/boards/${boardId}/timeline${qs}`, email);
 }
+
+/* ---------------- V2 comms (§11) ---------------- */
+
+export interface V2Channel {
+  id: string;
+  engagement_id: string | null;
+  name: string | null;
+  channel_type: string;
+  visibility: 'internal' | 'external';
+  created_by: string;
+  created_at: string;
+}
+
+export interface V2Message {
+  id: string;
+  channel_id: string;
+  parent_message_id: string | null;
+  body: string;
+  mentions: string[];
+  file_ids: string[];
+  created_by: string;
+  created_at: string;
+}
+
+export interface V2Meeting {
+  id: string;
+  engagement_id: string | null;
+  title: string;
+  starts_at: string;
+  duration_mins: number;
+  room_ref: string | null;
+  external_url: string | null;
+  created_by: string;
+}
+
+export async function channels(email: string | null, engagementId?: string) {
+  const qs = engagementId ? `?engagementId=${encodeURIComponent(engagementId)}` : '';
+  return api<V2Channel[]>(`/comms/channels${qs}`, email);
+}
+
+export async function channelMessages(email: string | null, channelId: string, parentMessageId?: string) {
+  const qs = parentMessageId ? `?parentMessageId=${encodeURIComponent(parentMessageId)}` : '';
+  return api<V2Message[]>(`/comms/channels/${channelId}/messages${qs}`, email);
+}
+
+export async function meetings(email: string | null, engagementId?: string) {
+  const qs = engagementId ? `?engagementId=${encodeURIComponent(engagementId)}` : '';
+  return api<V2Meeting[]>(`/comms/meetings${qs}`, email);
+}
