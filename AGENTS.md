@@ -96,6 +96,20 @@ Prefer small, well-specified slices: "Add board permission tests for vendor and 
   guest leak; both were wrong until checked per org with the actual request.
   State the claim, then reproduce it with the status code and the org the
   caller resolves to (`GET /identity/me`).
+- **A negative fixture must be built by an actor who can actually produce the
+  state you are asserting.** An "internal" record created by an
+  engagement-bound user is not engagement-less: `scheduleMeeting` stamps
+  `ctx.engagementId` on the row, so the client is excluded for the *scope*
+  reason, not the visibility reason, and the test passes for the wrong reason.
+  Build engagement-less fixtures with a division-wide role (`platform_owner`,
+  `operations_director`). The N2.4 first run failed two checks on exactly this.
+- **Assert exclusion, not emptiness.** `expect(clientMeetings).toHaveLength(0)`
+  breaks the moment an earlier fixture legitimately adds a visible row; assert
+  the internal id is *absent* from the list. Same for boards and workspaces.
+- **A boundary test needs the staff positive case.** Client-403 alone is
+  satisfied by breaking access for everyone. N2.4 asserts the AM still reads the
+  internal board 200, and a read-only reviewer can list meetings 200 but not
+  book 403.
 - **`scripts/loc.sh` counts `docs/`.** A ledger-only commit moves the headline
   LoC number. Quote the code-only subtotal, or the number will appear to drift
   with no code change.
